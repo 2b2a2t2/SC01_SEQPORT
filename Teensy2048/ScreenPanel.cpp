@@ -105,6 +105,7 @@ struct Cell {
 
 static Cell cells[SCR_CELLS];
 static char legendText[SCR_LEGENDS][18];
+static bool legendSel[SCR_LEGENDS];   // the armed F1..F4 radio / open M menu
 
 static char headerLeft[24] = "";
 static char headerRight[40] = "";
@@ -378,6 +379,12 @@ static void drawDialOnly(uint8_t i) {
 // label gets the same breathing room whatever its length.  The positions depend
 // on the text, so a change repaints the whole strip (2 rows, ~2 ms) rather than
 // one slot - it only happens on a mode or page change, never on a knob turn.
+//
+// One label can be ARMED: the chosen F radio, or the M button whose menu is
+// open.  It is filled with the accent and printed dark - the same treatment the
+// mode row gives the active mode - so the band says what the pads already say,
+// since a chosen F pad burns white (Modes.cpp).  The fill does not move any
+// label: the layout still comes from the measured widths alone.
 // ---------------------------------------------------------------------------
 static void drawLegendRow(uint8_t first, uint8_t count, int yCenter) {
   int w[5];
@@ -393,8 +400,16 @@ static void drawLegendRow(uint8_t first, uint8_t count, int yCenter) {
   int x = gap;
   tft.setTextDatum(lgfx::textdatum_t::middle_left);
   for (uint8_t k = 0; k < count; k++) {
-    if (legendText[first + k][0])
-      tft.drawString(legendText[first + k], x, yCenter);
+    if (legendText[first + k][0]) {
+      if (legendSel[first + k]) {
+        tft.fillRoundRect(x - 7, yCenter - 13, w[k] + 14, 26, 6, COL_ACCENT);
+        tft.setTextColor(COL_BG, COL_ACCENT);
+        tft.drawString(legendText[first + k], x, yCenter);
+        tft.setTextColor(COL_DIM, COL_BAND);
+      } else {
+        tft.drawString(legendText[first + k], x, yCenter);
+      }
+    }
     x += w[k] + gap;
   }
 }
@@ -444,7 +459,10 @@ void scrClear() {
     cellDirty[i] = false;
     dialDirty[i] = false;
   }
-  for (uint8_t i = 0; i < SCR_LEGENDS; i++) legendText[i][0] = '\0';
+  for (uint8_t i = 0; i < SCR_LEGENDS; i++) {
+    legendText[i][0] = '\0';
+    legendSel[i] = false;
+  }
   legendDirty = false;
   mainDirty = true;   // one band repaint draws the blank model back
 }
@@ -526,6 +544,16 @@ void scrLegend(uint8_t i, const char* text) {
   copyText(buf, sizeof(buf), fullName(text));
   if (strcmp(buf, legendText[i]) == 0) return;
   memcpy(legendText[i], buf, sizeof(buf));
+  legendDirty = true;
+}
+
+// Armed label: filled in the band.  Only the flag changes here - the strip is
+// justified, so the whole band has to be repainted for one label to grow a
+// background (it happens on a page change, not on a knob turn).
+void scrLegendSel(uint8_t i, bool on) {
+  if (i >= SCR_LEGENDS) return;
+  if (legendSel[i] == on) return;
+  legendSel[i] = on;
   legendDirty = true;
 }
 

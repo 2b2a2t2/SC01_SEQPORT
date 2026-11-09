@@ -212,13 +212,11 @@ static uint8_t drumIdx() {
   return ch < 16 ? ch : 0;
 }
 
-// 4 counts = 1 detent, residual kept (same shape as every SEQ knob)
+// list knobs (genre / variation / line): one value per detent, residual
+// kept.  encStep carries the panel's wider detent, so a nudge on the
+// detentless knobs no longer sweeps the whole list
 static int16_t det(int16_t *res, int16_t counts) {
-  *res += counts;
-  int16_t s = 0;
-  while (*res >= 4) { *res -= 4; s++; }
-  while (*res <= -4) { *res += 4; s--; }
-  return s;
+  return encStep(counts, res);
 }
 
 void drumGenreAdjust(int16_t counts) {

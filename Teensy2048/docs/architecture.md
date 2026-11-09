@@ -61,7 +61,6 @@ KEY_OCT_MIN  = -2
 KEY_OCT_MAX  = 8
 KEY_OCT_DEF  = 3      // C3 = 60
 KEY_VEL      = 100
-KEY_COUNTS_OCT = 4    // encoder counts per octave
 STEP_COUNT   = 16
 STEP_MAX     = 64     // 4 bars × 16 steps max per track
 CHORD_MAX    = 8      // notes per chord
@@ -70,8 +69,14 @@ SEQ_CH_COUNT = 16     // sequences = MIDI channels 1..16
 // Chord Engine (Chords.cpp / Chords.h)
 CHORD_VEL    = 100
 CHORD_N      = 8      // max simultaneous notes
-CHORD_ENC    = 4      // encoder counts per param step
 KEY_SCALE_COUNT = 54  // scale table size
+
+// Encoders (Encoders.cpp)
+// Every list/small-range knob (octave, scale, root, genre, phrase, drum
+// genre/variation/line, chord bass-spread-density, swing style) steps
+// through encStep(): 4 counts = one quadrature detent on the Teensy, 12 on
+// the SC01 Plus, whose detentless AS5600 knobs give 96 counts a turn.
+ENC_STEP_COUNTS = 4 (Teensy) / 12 (SC01 Plus)
 
 // Touch (TouchChips.h)
 TOUCH_THRESH = 50     // press threshold

@@ -6,6 +6,7 @@
 #include "Gen.h"          // FILL/ALGO gate for the bake's rhythm roll
 #include "bjorklund.h"    // Euclidean placement (same as the generators)
 #include "Display.h"      // headerShow: the progression announcement
+#include "Encoders.h"     // encStep - one genre / phrase per detent
 #include <stdio.h>
 #include <string.h>
 
@@ -18,6 +19,7 @@
 // state (RAM only - a reboot starts from the defaults below)
 // ---------------------------------------------------------------------------
 static uint8_t  sGenre = 0;                              // boot = genre 0
+static int16_t  sGenreRes = 0;                           // leftover counts
 static uint8_t  sKnob[7] = {50, 50, 50, 50, 50, 50, 50}; // MOOD..SURP
 
 // --- TONALITY page (M2): four banks of eight ------------------------------
@@ -437,6 +439,7 @@ static bool phraseEnd(uint8_t pos) {
 #define K4_PLAN_NONE 255
 
 static uint8_t sPhrase = 0;                 // 0 FREE .. 4 AABA
+static int16_t sPhraseRes = 0;              // leftover encoder counts
 static uint8_t sPlanDeg[4] = { K4_PLAN_NONE, K4_PLAN_NONE, K4_PLAN_NONE,
                                K4_PLAN_NONE };   // landing per bar
 static uint8_t sPlanGoal = K4_PLAN_NONE;    // the phrase end planned
@@ -453,10 +456,15 @@ static const char* const cadPair[4] = { "V-I", "IV-I", "V-vi", "ii-V" };
 static const char* const cadName[4] = { "AUTHENTIC", "PLAGAL", "DECEPTIVE",
                                         "HALF" };
 
+// PHRASE used to take one count per value - 96 values per turn over five
+// entries - so it now steps like every other list knob (encStep)
 void k4PhraseAdjust(int16_t counts) {
-  int v = (int)sPhrase + (counts > 0 ? 1 : -1);
+  int16_t step = encStep(counts, &sPhraseRes);
+  if (!step) return;
+  int v = (int)sPhrase + (int)step;
   if (v < 0) v = 0;
   if (v > 4) v = 4;
+  if ((uint8_t)v == sPhrase) return;
   sPhrase = (uint8_t)v;
   k4Refresh();
 }
@@ -863,7 +871,9 @@ void k4Refresh() {
 // context encoders
 // ---------------------------------------------------------------------------
 void k4GenreAdjust(int16_t counts) {
-  int g = (int)sGenre + (int)counts;
+  int16_t step = encStep(counts, &sGenreRes);
+  if (!step) return;
+  int g = (int)sGenre + (int)step;
   if (g < 0) g = 0;                       // clamp: the genre knob does
   if (g >= GENRE_COUNT) g = GENRE_COUNT - 1;   // not wrap around
   if ((uint8_t)g != sGenre) {
@@ -907,6 +917,7 @@ void k4TonaBankSet(uint8_t b) {
 uint8_t k4TonaBank() { return sTonaBank; }
 const char* k4TonaBankName() { return tonaBankNames[sTonaBank]; }
 const char* k4TonaBankLong() { return tonaBankLong[sTonaBank]; }
+const char* k4TonaBankNameAt(uint8_t b) { return tonaBankNames[b & 3]; }
 
 // one count per step; percents clamp, enums wrap (a selector should never
 // stick at its end - that reads as a dead knob)

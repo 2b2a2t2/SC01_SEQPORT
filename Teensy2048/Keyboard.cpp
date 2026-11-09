@@ -21,7 +21,6 @@
                            // puts C1 (36) .. B1 (47) under the 12 pads
 #define KEY_OCT_DEF    3      // C3 = 60 (middle C)
 #define KEY_VEL      100
-#define KEY_COUNTS_OCT 4      // encoder counts per octave step
 
 #define STEP_COUNT     16     // step pads = one edit window (one bar)
 #define STEP_MAX       64     // steps stored per track (4 bars of 16)
@@ -1246,11 +1245,10 @@ int keyPadRelease(uint8_t idx) {
   return keyNote[idx];
 }
 
+// one octave per detent: encStep, so the panel's detentless knobs step the
+// same 12 counts they give every other list (4 = one quadrature detent)
 void keyOctaveAdjust(int16_t counts) {
-  octRes += counts;
-  int8_t step = 0;
-  while (octRes >= KEY_COUNTS_OCT) { octRes -= KEY_COUNTS_OCT; step++; }
-  while (octRes <= -KEY_COUNTS_OCT) { octRes += KEY_COUNTS_OCT; step--; }
+  int16_t step = encStep(counts, &octRes);
   if (step) setOctave((int8_t)(octave + step));
 }
 
@@ -4177,15 +4175,12 @@ void chanKeyLinkSet(uint8_t on) { chanKeyLink = on ? 1 : 0; }
 
 uint8_t seqInputChannel() { return seqInCh[seqEditCh]; }
 
-// ENC1 in SEQMODE: octave shift of the edit sequence's playback, 4 counts
-// = 1 octave, clamped to the -2..8 convention, no wrap.  The range is
+// ENC1 in SEQMODE: octave shift of the edit sequence's playback, one
+// octave per detent (encStep), clamped to the -2..8 convention, no wrap.  The range is
 // recalculated from the stored notes on every content change (notes at C3
 // -> -5..+5), so the displayed range always fits the convention
 void seqOctaveShiftAdjust(int16_t counts) {
-  octSRes += counts;
-  int16_t st = 0;
-  while (octSRes >= 4) { octSRes -= 4; st++; }
-  while (octSRes <= -4) { octSRes += 4; st--; }
+  int16_t st = encStep(counts, &octSRes);
   if (!st) return;
   seqOctClamp(seqEditCh);            // current content bounds first
   int v = (int)seqOct[seqEditCh] + st;

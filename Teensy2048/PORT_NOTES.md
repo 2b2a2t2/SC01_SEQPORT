@@ -36,7 +36,7 @@ Both defined, or neither, stops the build with an `#error`.
 | `Display.cpp` | still owns every label and value, but draws through `Screen.h` instead of u8g2 directly — the SC01 build shows the 480x320 design, not a scaled 128x64 picture |
 | `Encoders.cpp` | TCA9548A (0x70..0x77 probe, this board answers at 0x71) + AS5600 angle, converted to 96 counts/rev so 1 detent = 4 counts like the Teensy |
 | `TouchChips.h/.cpp` | polled MPR121 every 20 ms instead of IRQ-driven; every address is tried, a missing chip is reported instead of aborting the loop |
-| `Buttons.h/.cpp` | `NUM_LEDS` 42→50, `DATA_PIN` 6→12, current cap `setMaxPowerInVoltsAndMilliamps(5,500)`, and the panel's pad → function order (see below) |
+| `Buttons.h/.cpp` | `NUM_LEDS` 42→50, `DATA_PIN` 6→12, current cap `setMaxPowerInVoltsAndMilliamps(5,500)`, and the panel's pad → function order (see below).  Pixels **42..49** are the eight added along the stripe, one behind each AS5600 knob (`ENC_LEDS` / `ENC_LED_FIRST`): no pad owns them, `Modes.cpp` paints them with the active MODE family's colour - purple ENC, blue SEQ, sea green KEY |
 | `Modes.cpp`, `SeqClock.cpp` | `FastLED.show()` → `ledsShow()` (identity on the Teensy) |
 | `UsbMidiShim.h/.cpp` | the whole file — nothing to dispatch to on the Teensy, so it compiles to nothing there |
 | `Chords.cpp`, `Events.cpp`, `Keyboard.cpp`, `Link.cpp`, `SeqClock.cpp` | one line each: `#include "UsbMidiShim.h"` — no other change |
@@ -64,9 +64,21 @@ second buffer. Quick check with the mode colours: the first button is Step 1
 and owns strip LED 0, and the six pads that map to slots 42..47 (pads 6..11,
 one chip's upper half) are the spares.
 
-Those six pads have no function in the original layout, so strip LEDs **42..47**
-stay dark, along with the two spare strip ends 48/49. Giving them a function is
-application work, not hardware work.
+Those six pads have no function in the original layout and carry no LED, so
+`kLedForPad` names them slots 42..47 and `initButtons()` turns every one of them
+into `-1`: the pad layer never writes those pixels. The strip is **50** pixels
+long - 42 behind the buttons, the last eight behind the knobs.
+
+The eight pixels added along the stripe are the **last** eight in wire order,
+**42..49**: they belong to no pad, so `refreshAllLeds()` and
+`handleTouches()` never write them, and `paintEncLeds()` in `Modes.cpp` owns
+them instead - it runs from `applyModeLeds()` on every mode change and once per
+`pollModeLeds()` pass, so the momentary holds (which change `modeBase` without
+calling `applyModeLeds()`) are covered too. They carry the family's own hue at
+`ENC_LED_LEVEL` (half, clearly brighter than an unselected mode button, since
+the strip runs at FastLED brightness 25), and go dark while no family is
+latched. If the pixels were soldered somewhere else on the chain, only
+`ENC_LED_FIRST` moves - the pad table is untouched.
 
 ## The clock tick on the SC01 (uClock 2.3.0 + arduino-esp32 3.x)
 
@@ -186,6 +198,53 @@ no-op on that platform, which is why the original order looked fine.
 
 The Teensy build keeps its original order and its `while (1)` on a missing
 chip: nothing there was being changed.
+
+## The legend says which control is armed
+
+The bottom band named the controls but never said which one was in use: an
+open M2 page, or which of F1..F4 the row was on, showed only on the pads (a
+chosen F pad burns white in `Modes.cpp`). The band now fills the armed label -
+accent fill, dark text, the same treatment the mode row gives the active mode -
+for the F radio of the open screen (the ENC5..8 CC bank, an ARP or GNR8 option,
+the step-edit attribute, the open TONALITY bank) and for the M button whose
+menu is open (SEQMODE's M2 track page, KEYMODE4's M2 TONALITY menu and its M1
+write state).
+
+The armed slot comes from the same predicates the pad colours read, so the two
+cannot drift, and the flags go through `scrLegendSel()`: a no-op on the 128x64
+panel, whose 25 px slots have no room to invert a label. The fill moves nothing
+on the panel - the row is still justified from measured widths - but the strip
+is repainted as a band, which happens on a page change, never on a knob turn.
+
+One label changed with it: with the M2 TONALITY menu open, F1..F4 pick its four
+banks, so the strip names them (`TONAL`/`CHROMA`/`VOICE`/`ARC`, via the new
+`k4TonaBankNameAt()`) instead of the row's usual `VAR`/`LOCK`/`LEAD`/`AUTO`,
+which those keys do not do while the page is open.
+
+## Knob rate: list knobs step wider than they did on the Teensy
+
+The eight panel knobs are detentless AS5600s read at 96 counts per turn, and
+the port kept the Teensy's "4 counts = one detent" arithmetic so every caller
+kept the tuning it had.  That is right for the knobs that hold a percentage
+(`encDrain`: 1 count = 1 unit, so a turn is the whole 0-100 range), but it made
+every **list** knob cross its menu on a nudge: GENRE moved 24 entries per
+full turn, and PHRASE (which added the raw counts, one value per *count*) 96.
+
+Every list / small-range knob now steps through `encStep()` (`Encoders.h` /
+`Encoders.cpp`): 4 counts on the Teensy, where that IS one real detent and
+nothing changes, and 12 on the SC01, where a turn is worth 8 values - the
+same weight a percentage knob has per turn (18 genres about two turns, the 5
+phrases about half of one).  Converted: octave (KEY and SEQ), scale, root,
+KEYMODE4 genre and phrase, chord bass / spread / density, drum genre /
+variation / line, swing style.
+
+Widths that scale with a long range were left at 4 counts, since they were
+not part of the report and a 65-value pattern length at 8 values per turn
+would be painful: pattern length, tempo, velocity, track / mono / poly type,
+the ARP lists, EXT IN / source and the GNR8 modifier amounts.
+
+Tuning: `ENC_STEP_COUNTS` in `Encoders.cpp` is the only number to change -
+raise it if a list still feels twitchy, lower it if a sweep feels slow.
 
 ## Deferred (next steps)
 

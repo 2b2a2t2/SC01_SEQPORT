@@ -19,6 +19,10 @@ Physical placement is your build's business — this page describes what is wire
 | 37–41 | Black keys | 37–41 |
 | 42–47 | — | none |
 
+On the **SC01 Plus** the strip carries eight more pixels, one behind each knob, after the
+last button pixel (42–49): no pad owns them, they take the active mode family's colour.
+See [PORT_NOTES](../PORT_NOTES.md).
+
 The keyboard is **not** in pad order: it is chromatic across the two rows, so the LED
 sequence is
 

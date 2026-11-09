@@ -29,7 +29,7 @@ fill every bar if you left `VAR` on.
 - The F row gives four knob sets: **F1** groove (genre/VAR/FILL/MOT), **F2** the four lane
   lines (`A` / `B` / `OFF`), **F3** per-lane FILL, **F4** per-lane MOT. The master knobs
   write all four lanes; the per-lane knobs trim them.
-- `SEQUENCER 3 → ENC6` stays on the track; **ENC5 = `MAP`** switches the kit between
+- `SEQUENCER 3 → ENC6` stays on the track; **ENC7 = `MAP`** switches the kit between
   `CUSTOM` and `GM`, and re-bakes the pattern onto the new map.
 - The 18 styles are independent of the KEY 4 progression genre: a jazz progression can run
   over a trap beat on purpose.

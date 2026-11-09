@@ -49,5 +49,11 @@ void scrCellValue(uint8_t i, const char* text);
 void scrDial(uint8_t i, const char* caption, uint8_t value);
 
 void scrLegend(uint8_t i, const char* text);  // "" blanks the slot
+// Which legend slot is ARMED right now: the F1..F4 radio of the open page, or
+// the M button whose menu is open.  The panel fills that label the way the mode
+// row fills the active mode, so the strip says what the pads already show - a
+// chosen F pad burns white there (Modes.cpp), and the legend names which one.
+// No-op on the 128x64 panel: its 4x6 strip has no room to invert a label.
+void scrLegendSel(uint8_t i, bool on);
 
 void scrUpdate();   // push whatever changed (one OLED page per call)

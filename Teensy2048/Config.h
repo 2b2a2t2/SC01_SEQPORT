@@ -10,8 +10,9 @@
                    42 WS2812 LEDs on pin 6
    use_SC01Plus  - the SC01 Plus panel: ESP32-S3, ST7796 480x320 (the 128x64
                    layout is scaled 3.75x and letterboxed), AS5600 magnetic
-                   knobs behind a TCA9548A mux, polled MPR121 touch, 50
-                   WS2812 LEDs on pin 12
+                   knobs behind a TCA9548A mux, polled MPR121 touch, 50 WS2812
+                   LEDs on pin 12 (42 behind the buttons, the last eight
+                   behind the knobs carrying the active mode family's colour)
 
 Everything except the hardware layer (display, encoders, touch, LEDs, and the
 Wire/panel bring-up in Teensy2048.ino) is shared, unmodified code.

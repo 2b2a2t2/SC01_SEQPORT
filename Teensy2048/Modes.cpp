@@ -154,6 +154,29 @@ static CRGB dimColorFor(ModeBase b) {
   return c;
 }
 
+// The eight pixels added along the stripe, one behind each AS5600 knob (see
+// ENC_LED_FIRST in Buttons.h): they carry the ACTIVE MODE family's own colour
+// - purple ENC, blue SEQ, sea green KEY - so the hardware names the family the
+// knobs are driving before the screen is read.  Brighter than an unselected
+// mode button (ENC_LED_LEVEL, half) because the strip runs at brightness 25
+// and the dim level would vanish behind a knob; black while no family is
+// latched (boot, safe mode).  No pad owns these pixels, so refreshAllLeds()
+// never fights it.  Repainted on every mode change (applyModeLeds) and once
+// per loop pass (pollModeLeds), which also covers the momentary holds.
+#define ENC_LED_LEVEL 128
+static void paintEncLeds() {
+  CRGB c = CRGB::Black;
+  if (modeBase == MODE_ENC)      c = CRGB::Purple;
+  else if (modeBase == MODE_SEQ) c = CRGB::Blue;
+  else if (modeBase == MODE_KEY) c = CRGB::MediumSeaGreen;
+  c.nscale8(ENC_LED_LEVEL);
+  bool changed = false;
+  for (uint8_t i = ENC_LED_FIRST; i < (uint8_t)(ENC_LED_FIRST + ENC_LEDS); i++) {
+    if (leds[i] != c) { leds[i] = c; changed = true; }
+  }
+  if (changed) ledsShow();
+}
+
 // SEQMODE track-type palette: ONE hue per track type.  The M2 page pad wears
 // it (so the pad says which page it opens), and the M2 page's own F row
 // wears it too.  RED / ORANGE / YELLOW ARE OFF LIMITS - they already mean
@@ -819,6 +842,7 @@ static void applyModeLeds() {
       ? selectedModeColor()
       : dimColorFor(modeOfLed[i]);
   }
+  paintEncLeds();      // the knob pixels follow the family, not the variant
   ledsShow();
   refreshAllLeds();   // keyboard/step pads follow the new mode via the hook
 }
@@ -826,6 +850,10 @@ static void applyModeLeds() {
 void pollModeLeds() {
   static unsigned long lastPulseShow = 0;
   static int8_t lastBlink = -1;
+
+  // the knob pixels follow modeBase, which the momentary holds change without
+  // going through applyModeLeds - an 8-pixel compare per pass keeps them true
+  paintEncLeds();
 
   // ENCABLETONMODE: clip states and the triggered-clip blink come from the
   // script, so the pad row is repainted at ~30 fps while the overlay is up

@@ -1,10 +1,10 @@
 #include "Chords.h"
 #include "Keyboard.h"   // keyChannel(), keyPendingRefresh()
 #include "UsbMidiShim.h"    // usbMIDI (Teensy core on the Teensy, facade on SC01)
+#include "Encoders.h"      // encStep - one step per detent on the list knobs
 
 #define CHORD_VEL   100
 #define CHORD_N     8      // notes sounding at once
-#define CHORD_ENC   4      // encoder counts per param step
 
 // 54 scales; patterns are 12-bit masks rooted at C (bit0 = C) so the
 // keyRoot rotation lands on the right pitch classes
@@ -156,10 +156,7 @@ static uint8_t clampNote(int n) {
 // ---------------------------------------------------------------------------
 
 void keyScaleAdjust(int16_t counts) {
-  sScaleRes += counts;
-  int8_t step = 0;
-  while (sScaleRes >= CHORD_ENC) { sScaleRes -= CHORD_ENC; step++; }
-  while (sScaleRes <= -CHORD_ENC) { sScaleRes += CHORD_ENC; step--; }
+  int16_t step = encStep(counts, &sScaleRes);
   if (!step) return;
   int v = (int)sScale + step;
   if (v < 0) v = 0;
@@ -176,10 +173,7 @@ const char* keyScaleName() { return kScaleName[sScale]; }
 const char* keyScaleMood() { return kScaleMood[sScale]; }
 
 void keyRootAdjust(int16_t counts) {
-  sRootRes += counts;
-  int8_t step = 0;
-  while (sRootRes >= CHORD_ENC) { sRootRes -= CHORD_ENC; step++; }
-  while (sRootRes <= -CHORD_ENC) { sRootRes += CHORD_ENC; step--; }
+  int16_t step = encStep(counts, &sRootRes);
   if (!step) return;
   int v = (int)sRoot + step;
   if (v < 0) v = 0;
@@ -582,10 +576,7 @@ void chordSetExt(uint8_t ext, bool on) {
 
 void chordParamAdjust(uint8_t idx, int16_t counts) {
   if (idx >= 4) return;
-  sParamRes[idx] += counts;
-  int8_t step = 0;
-  while (sParamRes[idx] >= CHORD_ENC) { sParamRes[idx] -= CHORD_ENC; step++; }
-  while (sParamRes[idx] <= -CHORD_ENC) { sParamRes[idx] += CHORD_ENC; step--; }
+  int16_t step = encStep(counts, &sParamRes[idx]);
   if (!step) return;
   int v = (int)sParam[idx] + step;
   if (v < 0) v = 0;

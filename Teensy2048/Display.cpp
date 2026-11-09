@@ -104,6 +104,11 @@ static const char* ctrlLegend(uint8_t i) {
       static const char* fr[4] = { "F1", "F2", "F3", "F4" };
       return fr[i - 5];
     }
+    // ...with the M2 TONALITY menu open, F1..F4 pick that page's four banks,
+    // so the strip names them instead of the row's usual VAR/LOCK/LEAD/AUTO
+    if (key4 && k4Tonality()) {
+      return k4TonaBankNameAt((uint8_t)(i - 5));
+    }
     if (key4) {          // KEYMODE4: VAR / LOCK / LEAD / HOLD
       static const char* k4r2[4] = { "VAR", "LOCK", "LEAD", "AUTO" };
       return k4r2[i - 5];
@@ -160,6 +165,64 @@ static const char* ctrlLegend(uint8_t i) {
   return "PREV";
 }
 
+// The nine control-column labels, and which of them is ARMED.
+//
+// The strip used to name the buttons and nothing else, so an open page or an
+// armed radio was visible only on the pads.  The band can say it too: the
+// chosen F1..F4 (the ENC CC bank, an ARP/GNR8 option, the step-edit attribute,
+// the open TONALITY bank) and the M button whose menu is open are filled.
+// This reads the same state Modes.cpp lights the pads from, so the two agree.
+static void writeLegends() {
+  for (uint8_t c = 0; c < 5; c++) {
+    scrLegend(c, ctrlLegend(c));
+    scrLegend((uint8_t)(5 + c), ctrlLegend((uint8_t)(5 + c)));
+  }
+
+  const bool k4m = (modeBase == MODE_KEY && modeVariant == 4);
+  const bool polyRadio = (modeBase == MODE_SEQ && modeVariant != 3 &&
+                          seqTrack() == SEQ_TRACK_POLY);
+  // any encoder page of the open track: it owns the M2 button and the row
+  const bool pageOwns = drumPageActive() || arpPageActive() ||
+                        genPageActive() || leadPageActive() ||
+                        harmPageActive() || compPageActive() ||
+                        skankPageActive();
+  // SEQMODE MONO: M1's label is EDIT - the edit radio's own button.  It is
+  // filled while the radio sits on STEPS (target 0); once TIE/GLIDE/... is
+  // chosen that F label carries the mark instead, still on the same radio
+  const bool seqMono = (modeBase == MODE_SEQ && modeVariant != 3 &&
+                        seqTrack() == SEQ_TRACK_MONO);
+
+  // F row: 1..4 = the armed slot, 0 = this screen has no radio
+  uint8_t wantF = 0;
+  if (modeBase == MODE_ENC && modeVariant != 3 && !abltOn()) {
+    wantF = (uint8_t)(encBank() + 1);             // F1..F4 = the CC bank
+  } else if (arpPageActive()) {
+    const uint8_t s = arpOptionSel();
+    if (s < 4) wantF = (uint8_t)(s + 1);
+  } else if (genPageActive()) {
+    const uint8_t s = genOptionSel();
+    if (s < 4) wantF = (uint8_t)(s + 1);
+  } else if (k4m && k4Tonality()) {
+    wantF = (uint8_t)(k4TonaBank() + 1);          // the open TONALITY bank
+  } else if (stepEditIsOn()) {
+    // the same mapping Modes.cpp uses for the pads: MONO/DRUM = target 1..4,
+    // POLY = F1 STEP FX (5), F2 STEP TYPE (6), then 3/4
+    const uint8_t sel = stepEditSel();
+    if (polyRadio && sel == 5) wantF = 1;
+    else if (polyRadio && sel == 6) wantF = 2;
+    else if (sel >= 1 && sel <= 4) wantF = sel;
+  }
+  for (uint8_t c = 0; c < 4; c++)
+    scrLegendSel((uint8_t)(5 + c), wantF == (uint8_t)(c + 1));
+
+  // M row: M2's menu (the TONALITY page, or the track page in SEQMODE) and
+  // KEYMODE4's M1 write state
+  scrLegendSel(3, k4m ? k4Tonality() : pageOwns);
+  scrLegendSel(2, k4m ? k4Write()
+                      : (seqMono && stepEditIsOn() && stepEditSel() == 0 &&
+                         !pageOwns));
+}
+
 void refreshMainScreen() {
   // A frame, not a wipe: every scr*() below compares against what is already
   // on the panel and repaints only the cells, dials and legend slots that
@@ -198,11 +261,7 @@ void refreshMainScreen() {
       scrCellLabelSmall((uint8_t)(4 + c), nm2);
       scrCellValue((uint8_t)(4 + c), tx2);
     }
-    for (uint8_t c = 0; c < 5; c++) {
-      scrLegend(c, ctrlLegend(c));
-      const char* r2 = ctrlLegend((uint8_t)(5 + c));
-      scrLegend((uint8_t)(5 + c), r2);   // "" blanks the slot: no stale text
-    }
+    writeLegends();
     return;
   }
 
@@ -220,11 +279,7 @@ void refreshMainScreen() {
       snprintf(ccLab, sizeof(ccLab), "CC%u", encCcNum((uint8_t)(4 + c)));
       scrDial((uint8_t)(4 + c), ccLab, encCcValue((uint8_t)(4 + c)));
     }
-    for (uint8_t c = 0; c < 5; c++) {
-      scrLegend(c, ctrlLegend(c));
-      const char* r2 = ctrlLegend((uint8_t)(5 + c));
-      scrLegend((uint8_t)(5 + c), r2);   // "" blanks the slot: no stale text
-    }
+    writeLegends();
     return;
   }
 
@@ -655,9 +710,10 @@ void refreshMainScreen() {
       l2 = ccL2;
     }
     if (c == 1 && f3AccentActive()) l2 = "ACC";   // F3 held: ENC6 = accent
-    if (!drumP && modeBase == MODE_SEQ && modeVariant != 3 &&
-        seqTrack() == SEQ_TRACK_DRUM && 4 + c == 4)
-      l2 = "MAP";                     // DRUM track: ENC5 = the kit mapping
+    if (!drumP && modeBase == MODE_SEQ && modeVariant == 3 &&
+        seqTrack() == SEQ_TRACK_DRUM && 4 + c == 6)
+      l2 = "MAP";           // DRUM track, SEQMODE3 only: the kit mapping sits
+                             // on the dead TYPE knob (ENC7)
     if (arpP) {                                   // arp page: sub-page slots
       int8_t slot = arpSlotAt(arpOptionSel(), (uint8_t)(4 + c));
       if (slot >= 0) l2 = seqArpPName((uint8_t)slot);
@@ -686,8 +742,8 @@ void refreshMainScreen() {
       l2 = s2[c];
     }
     scrCellLabel((uint8_t)(4 + c), l2);
-    if (!drumP && modeBase == MODE_SEQ && modeVariant != 3 &&
-        seqTrack() == SEQ_TRACK_DRUM && 4 + c == 4) {
+    if (!drumP && modeBase == MODE_SEQ && modeVariant == 3 &&
+        seqTrack() == SEQ_TRACK_DRUM && 4 + c == 6) {
       snprintf(val, sizeof(val), "%s", drumMapName(drumMap())); // CUSTOM / GM
     } else if (drumP && !seqOv) {
       // DRUM page row 2 (ENC5..8): the base row's four lane selectors.
@@ -820,11 +876,7 @@ void refreshMainScreen() {
     scrCellValue((uint8_t)(4 + c), val);
   }
 
-  for (uint8_t c = 0; c < 5; c++) {
-    scrLegend(c, ctrlLegend(c));
-    const char* r2 = ctrlLegend((uint8_t)(5 + c));
-    scrLegend((uint8_t)(5 + c), r2);   // "" blanks the slot: no stale text
-  }
+  writeLegends();
 }
 
 void drawHeaderText() {

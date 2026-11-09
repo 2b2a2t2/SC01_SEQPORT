@@ -134,6 +134,7 @@ void        k4TonaBankSet(uint8_t b);   // 0..3
 uint8_t     k4TonaBank();
 const char* k4TonaBankName();           // "TONAL" (header left slot)
 const char* k4TonaBankLong();           // "Tonal Center"
+const char* k4TonaBankNameAt(uint8_t b);  // "TONAL".."ARC" for the F legend row
 
 bool k4LeadToggle();       // F3: inversions choose minimal bass movement
 bool k4Lead();

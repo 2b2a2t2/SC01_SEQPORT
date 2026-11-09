@@ -159,6 +159,13 @@ void scrLegend(uint8_t i, const char* text) {
   mark();
 }
 
+// The 128x64 strip is 25 px per slot at 4x6: a filled label there would have
+// to lose the text it is pointing at.  The pads show the armed control.
+void scrLegendSel(uint8_t i, bool on) {
+  (void)i;
+  (void)on;
+}
+
 // Paged write: one 128-byte page (~4ms @400kHz) per call so the MIDI pump runs
 // between pages - a monolithic sendBuffer stalls ~37ms, longer than one MIDI
 // clock at 120BPM, and the burst poisons uClock's external interval.

@@ -819,10 +819,7 @@ static int16_t swingRes = 0;               // leftover encoder counts (style)
 static int16_t swingAmtRes = 0;            // leftover encoder counts (amount)
 
 void seqSwingStyleAdjust(int16_t counts) {
-  swingRes += counts;
-  int8_t step = 0;
-  while (swingRes >= 4)  { swingRes -= 4;  step++; }
-  while (swingRes <= -4) { swingRes += 4;  step--; }
+  int16_t step = encStep(counts, &swingRes);
   if (!step) return;
   int16_t v = (int16_t)swingStyle[seqEditChannel() - 1] + step;
   if (v < SEQ_SWING_OFF) v = SEQ_SWING_OFF;

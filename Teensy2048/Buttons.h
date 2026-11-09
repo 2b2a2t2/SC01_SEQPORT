@@ -11,9 +11,21 @@
 #ifdef use_SC01Plus
 #define NUM_LEDS 50      // strip length; leds[] is indexed by button, see below
 #define DATA_PIN 12
+// The eight pixels added along the stripe, one behind each AS5600 knob: the
+// LAST eight in wire order (42..49).  They belong to no pad - the 42 button
+// pixels are 0..41 and the six function-less buttons carry no LED, so
+// initButtons() maps those pads to -1 and the pad layer never writes here.
+// Modes.cpp paints them with the active MODE family's colour, so the hardware
+// says which family the knobs are driving before the screen is read.  If the
+// pixels were soldered in somewhere else on the chain, only ENC_LED_FIRST
+// moves.
+#define ENC_LEDS 8
+#define ENC_LED_FIRST (NUM_LEDS - ENC_LEDS)   // 42
 #else
 #define NUM_LEDS 42
 #define DATA_PIN 6
+#define ENC_LEDS 0
+#define ENC_LED_FIRST NUM_LEDS
 #endif
 
 #define BTN_HOLD_MS   300

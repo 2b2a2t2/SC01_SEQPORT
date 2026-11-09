@@ -35,7 +35,7 @@ enum DrumVar : uint8_t {
 enum DrumLine : uint8_t {
   DRUM_LINE_A = 0, DRUM_LINE_B, DRUM_LINE_OFF
 };
-// Kit MAPPING of the DRUM track (SEQMODE ENC5, variants 1/2/4).  CUSTOM is
+// Kit MAPPING of the DRUM track (SEQMODE3 ENC7, the TYPE slot).  CUSTOM is
 // the kit this controller drives (C1 bass drum, C#1 hand clap, D1/D#1 hats,
 // E1 snare, F1/F#1/G1 congas, G#1/A1/A#1 toms, C2 cow bell, C#2 claves,
 // D2 maracas, D#2 cymbal) and the default; GM is the General MIDI percussion

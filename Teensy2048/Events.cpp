@@ -986,7 +986,11 @@ void handleButtonEvents() {
           if (logRoom(48)) Serial.println("  step edit off");
         }
         refreshAllLeds();
-        if (droppedPage) refreshMainScreen();   // the encoder row changes
+        // The band marks the armed radio, so it has to follow the click itself
+        // and not only a dismissed page - a page also rewrites the encoder row,
+        // but the radio moving STEPS -> OFF -> STEPS is a legend change alone
+        (void)droppedPage;
+        refreshMainScreen();
       } else if (ev == EV_CLICKED && stepEditAccCtx()) {
         // SEQMODE + DRUM/POLY: a QUICK tap of M1 toggles the edit master only
         // (a HOLD still opens the part select - hold suppresses the click)
@@ -1242,7 +1246,11 @@ void handleButtonEvents() {
         }
       }
       refreshAllLeds();
-      if (droppedArp) refreshMainScreen();  // the encoder row changes
+      // likewise every target click: the band's armed label IS the target, and
+      // before this the redraw waited for the next page change or step tap,
+      // which made the highlight lag one press behind the knob
+      (void)droppedArp;
+      refreshMainScreen();
     }
 
     // NEXT in ENCMODE: the ENCABLETONMODE overlay (latched).  NEXT has no
@@ -3306,23 +3314,6 @@ void handleEncoderEvents() {
         // armed step TYPE while those targets are engaged (POLY),
         // ENC8 = the probability of the edit track itself - live, so every
         // PROB step of that track re-rolls at the new rate
-        } else if (ed != 0 && ei == 4 && seqTrack() == SEQ_TRACK_DRUM) {
-          // SEQMODE ENC5 on a DRUM track = the kit MAPPING: CUSTOM (this
-          // kit, boot default) or GM (General MIDI percussion).  It is a
-          // track setting, so it works with the step-edit radio on or off;
-          // the M2 DRUM page keeps ENC5 = KICK while it is open.  Two-state,
-          // NO wrap (CW = GM, CCW = CUSTOM, like KLOCK); a change re-bakes
-          // the pattern onto the new map (one undo burst)
-          if (drumMapSetDir(ed)) {
-            drumProduce();
-            char mb[24];
-            snprintf(mb, sizeof(mb), "Kit Map %s", drumMapName(drumMap()));
-            headerShow(mb);
-            refreshAllLeds();
-            refreshMainScreen();
-            if (logRoom(48)) { Serial.print("  "); Serial.println(mb); }
-          }
-          any = true;
         } else if (ei == 5 && ed != 0 && f3AccentActive()) {
           seqAccentVelocityAdjust(ed);
           headerAnnounceInt("Accent Velocity", seqAccentVelocity());
@@ -3499,6 +3490,24 @@ void handleEncoderEvents() {
         if (logRoom(48)) {
           Serial.print("  track ");
           Serial.println(seqTrackName());
+        }
+        any = true;
+      } else if (ei == 6 && ed != 0 && seqTrack() == SEQ_TRACK_DRUM) {
+        // SEQMODE3 TYPE knob (ENC7) on a DRUM track: a drum has no mono/poly
+        // subtype, so the slot was dead there - it now carries the kit
+        // MAPPING instead (CUSTOM = this kit, boot default; GM = General
+        // MIDI percussion).  Two-state, NO wrap (CW = GM, CCW = CUSTOM, like
+        // KLOCK); a change re-bakes the pattern onto the new map (one undo
+        // burst).  This is the ONLY place the map is set - the pattern row
+        // keeps ENC5 = gate on a drum track, as it was before
+        if (drumMapSetDir(ed)) {
+          drumProduce();
+          char mb[24];
+          snprintf(mb, sizeof(mb), "Kit Map %s", drumMapName(drumMap()));
+          headerShow(mb);
+          refreshAllLeds();
+          refreshMainScreen();
+          if (logRoom(48)) { Serial.print("  "); Serial.println(mb); }
         }
         any = true;
       } else if (ei == 6 && ed != 0 &&

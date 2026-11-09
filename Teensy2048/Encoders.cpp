@@ -259,6 +259,29 @@ int16_t encDrain(int16_t counts, int16_t *res) {
   return (int16_t)(counts * mul);
 }
 
+// Stepped knobs: one value per detent.  The quadrature knobs deliver four
+// counts per detent, so 4 keeps exactly the rate these knobs were tuned
+// against on the Teensy.  The panel knobs are detentless AS5600s at 96
+// counts per turn, where 4 counts per value read as ~24 entries per turn:
+// a slight nudge crossed half the genre list, and PHRASE - which took one
+// count per value - jumped on the lightest touch.  12 counts makes a turn
+// worth 8 values (the 18 genres about two turns, the 5 phrases about half
+// of one), which is the same weight a 0-100% knob has per turn.
+#ifdef use_SC01Plus
+#define ENC_STEP_COUNTS 12
+#else
+#define ENC_STEP_COUNTS 4     // one detent
+#endif
+
+int16_t encStep(int16_t counts, int16_t *res) {
+  int32_t acc = (int32_t)*res + (int32_t)counts;
+  int16_t s = 0;
+  while (acc >= ENC_STEP_COUNTS) { acc -= ENC_STEP_COUNTS; s++; }
+  while (acc <= -ENC_STEP_COUNTS) { acc += ENC_STEP_COUNTS; s--; }
+  *res = (int16_t)acc;                    // always below one step
+  return s;
+}
+
 // ENCMODE3: channel of the encoder CCs
 static uint8_t encCh = 1;
 
