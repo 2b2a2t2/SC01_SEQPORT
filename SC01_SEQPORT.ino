@@ -10,9 +10,13 @@ Hardware on the board, brought up here:
 
 Boot diagnosis
 --------------
-A reset reason and the last bring-up stage reached are kept in RTC memory
-and shown on page 0, so a board that reboots tells you where it died
-without a serial console:
+A reset reason and the last bring-up stage reached are kept in NVS and shown
+on page 0, so a board that reboots tells you where it died without a serial
+console. NVS and not RTC memory, on purpose: a brownout clears the RTC domain,
+so the failure count restarted at zero on every boot and safe mode could never
+engage - which is what made a rebooting board reboot for ever. Each stage is
+recorded *before* the step runs, so the value shown names the step that never
+returned.
 
   RESET  power on / brownout / panic / int wdt / task wdt / sw reset
   STAGE  which init step the previous boot last completed
@@ -20,8 +24,9 @@ without a serial console:
 
 Two failed boots in a row and the sketch starts in SAFE MODE with the LEDs,
 pad controllers and encoders left off, so a fault in any of them cannot hide
-the display or the reason. Tap through the pages to confirm it is alive; power cycle to
-leave safe mode.
+the display or the reason. Tap through the pages to confirm it is alive. A boot
+that gets all the way through clears the count, so power cycling leaves safe
+mode - and if the fault is still there it comes back after two more boots.
 
 Pages (none of them rotate on their own - tap to change):
   0  boot + panel self-test (header tap opens it)
@@ -31,12 +36,13 @@ Pages (none of them rotate on their own - tap to change):
   4  devices     - what answered on both I2C buses, live pad + strip state
 
 Serial: r = recalibrate MPR121, d = print baselines, e = encoder diag,
-        s = scan both I2C buses.
+        s = scan both I2C buses, L = run the LED sweep again (works in safe mode).
 **********************************************************/
 #include <Arduino.h>
 #include <esp_system.h>
 #include <FS.h>
 #include <SD.h>
+#include <Preferences.h>
 #include <SPI.h>
 #include <stdlib.h>
 
@@ -61,21 +67,26 @@ PanelSC01 tft;
 // jumps; STATS_MS still paces the device census and the draw-time cell.
 #define ENC_UI_MS 33
 
-// --- boot bookkeeping, kept across resets (not across power loss) ----------
-#define RTC_MAGIC 0x53433031u  // "SC01"
+// --- boot bookkeeping, kept in NVS so it survives a brownout --------------
+// RTC_NOINIT was the wrong home for this: a rail that drops far enough to reset
+// the chip also loses the RTC domain, so the count came back as zero every time
+// and a rebooting board never reached safe mode. NVS is flash and keeps the
+// count across anything short of erasing the chip.
+#define BOOT_MAGIC 0x53433032u  // "SC02"; bump it when the stage list changes
 
 enum Stage : uint32_t {
   ST_BOOT = 0,
   ST_DISPLAY = 1,
-  ST_LEDS = 2,
-  ST_PADS = 3,
-  ST_ENCODERS = 4,
-  ST_DONE = 5
+  ST_LEDS = 2,     // addLeds + the first clear
+  ST_LEDTEST = 3,  // the one-at-a-time sweep
+  ST_PADS = 4,
+  ST_ENCODERS = 5,
+  ST_DONE = 6
 };
 
-RTC_NOINIT_ATTR static uint32_t rtcMagic;
-RTC_NOINIT_ATTR static uint32_t rtcStage;
-RTC_NOINIT_ATTR static uint32_t rtcBoots;
+static Preferences bootPrefs;
+static uint32_t bootStage = ST_BOOT;  // stage stored by the previous boot
+static uint32_t bootCount = 0;        // boots in a row that did not finish
 
 static bool safeMode = false;
 static uint8_t chipsFound = 0;
@@ -84,6 +95,7 @@ static const char* stageName(uint32_t s) {
   switch (s) {
     case ST_DISPLAY: return "display";
     case ST_LEDS: return "leds";
+    case ST_LEDTEST: return "ledsweep";
     case ST_PADS: return "pads";
     case ST_ENCODERS: return "encoders";
     case ST_DONE: return "ready";
@@ -105,6 +117,16 @@ static const char* resetName(esp_reset_reason_t r) {
     case ESP_RST_SDIO: return "sdio";
     default: return "unknown";
   }
+}
+
+// Record the step that is about to run. Writing before the work, not after, is
+// what makes the stored value name the step that died: the one in the record is
+// the one that never returned. The serial echo is flushed so a panic backtrace
+// arrives after it and not instead of it.
+static void bootMark(uint32_t s) {
+  bootPrefs.putUInt("stage", s);
+  Serial.printf("  stage %s\n", stageName(s));
+  Serial.flush();
 }
 
 // One OLED screen's worth of content.
@@ -211,8 +233,8 @@ static void updateBootCells() {
   char buf[16];
 
   displaySetCellValue(0, resetName(esp_reset_reason()));
-  displaySetCellValue(1, stageName(rtcStage > ST_DONE ? ST_BOOT : rtcStage));
-  snprintf(buf, sizeof(buf), "%lu", (unsigned long)rtcBoots);
+  displaySetCellValue(1, stageName(bootStage > ST_DONE ? ST_BOOT : bootStage));
+  snprintf(buf, sizeof(buf), "%lu", (unsigned long)bootCount);
   displaySetCellValue(2, buf);
   snprintf(buf, sizeof(buf), "%uK", (unsigned)(ESP.getFreeHeap() / 1024));
   displaySetCellValue(3, buf);
@@ -299,6 +321,18 @@ static void i2cScan() {
   i2cScanBus(Wire1, "6/5  panel bus"); // FT5x06, in case the mux landed here
 }
 
+// 'L' - bring the strip up and run the sweep on demand. In safe mode this is
+// the only way to touch the LEDs, which is what makes it worth having: if the
+// board resets here, the strip or its driver is the fault and not the pads or
+// the encoders. initLeds() is idempotent, so pressing it twice is harmless.
+static void ledSelfTest() {
+  bootMark(ST_LEDTEST);
+  initLeds();
+  ledStartupTest();
+  bootMark(ST_DONE);
+  Serial.println("led test: done");
+}
+
 static void handleSerial() {
   while (Serial.available()) {
     const int c = Serial.read();
@@ -306,6 +340,7 @@ static void handleSerial() {
     else if (c == 'd' || c == 'D') touchPrintDiag();
     else if (c == 'e' || c == 'E') encPrintDiag();
     else if (c == 's' || c == 'S') i2cScan();
+    else if (c == 'l' || c == 'L') ledSelfTest();
   }
 }
 
@@ -314,20 +349,22 @@ void setup() {
   delay(50);
 
   // Did the previous run get all the way through bring-up?
-  const bool survived = (rtcMagic == RTC_MAGIC);
-  const uint32_t lastStage = survived ? rtcStage : ST_BOOT;
-  if (survived && rtcStage != ST_DONE) rtcBoots++;
-  else rtcBoots = 0;
-  safeMode = survived && rtcBoots >= 2;
-  rtcMagic = RTC_MAGIC;
-  rtcStage = ST_BOOT;
+  bootPrefs.begin("sc01boot", false);
+  const bool known = bootPrefs.getUInt("magic", 0) == BOOT_MAGIC;
+  bootStage = known ? bootPrefs.getUInt("stage", ST_BOOT) : ST_BOOT;
+  bootCount = known ? bootPrefs.getUInt("boots", 0) : 0;
+  if (known && bootStage != ST_DONE) bootCount++;
+  else bootCount = 0;
+  safeMode = known && bootCount >= 2;
+  bootPrefs.putUInt("magic", BOOT_MAGIC);
+  bootPrefs.putUInt("boots", bootCount);
 
   Serial.print("boot ");
-  Serial.print(rtcBoots);
+  Serial.print(bootCount);
   Serial.print(" reset=");
   Serial.print(resetName(esp_reset_reason()));
   Serial.print(" last stage=");
-  Serial.println(stageName(lastStage));
+  Serial.println(stageName(bootStage > ST_DONE ? ST_BOOT : bootStage));
   if (safeMode) Serial.println("SAFE MODE: LEDs and pads disabled");
 
   pinMode(SD_CS, OUTPUT);
@@ -336,31 +373,33 @@ void setup() {
   bool sdOk = SD.begin(SD_CS);
   (void)sdOk;
 
+  bootMark(ST_DISPLAY);
   initDisplay();
   displaySetModes("ENC", "SEQ", "KEY");
   if (safeMode) headerSetStick("SAFE MODE");
   showPage(0);
-  rtcStage = ST_DISPLAY;
 
   if (!safeMode) {
+    bootMark(ST_LEDS);
     initLeds();
+    bootMark(ST_LEDTEST);
     ledStartupTest();
-    rtcStage = ST_LEDS;
 
+    bootMark(ST_PADS);
     initTouchChips();
     chipsFound = touchChipsFound();
-    if (chipsFound == 0)
-      Serial.println("MPR121 init FAILED - check 10/11 and the ADDR straps");
-    rtcStage = ST_PADS;
+    if (chipsFound < NUM_CHIPS)
+      Serial.printf("MPR121: %u of %u answered - check 10/11 and the ADDR straps\n",
+                    (unsigned)chipsFound, (unsigned)NUM_CHIPS);
 
     i2cScan();  // show what the encoder probe is about to look for
+    bootMark(ST_ENCODERS);
     initEncoders();
   }
-  rtcStage = ST_ENCODERS;
 
   updateBootCells();
-  rtcStage = ST_DONE;
-  rtcBoots = 0;
+  bootPrefs.putUInt("boots", 0);  // a full bring-up clears the failure count
+  bootMark(ST_DONE);
 }
 
 void loop() {

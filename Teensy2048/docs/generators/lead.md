@@ -1,0 +1,28 @@
+<!-- section moved from the old README; edit freely -->
+_Docs home: [Teensy2048](../README.md) · [Cheat sheet](../cheatsheet.md) · [Glossary](../glossary.md)_
+
+# LEAD Generator (MONO, TYPE = LEAD)
+- **M2** becomes a **LEAD** key on such a track: click toggles the LEAD encoder page (the click announces `Lead`, the control legend reads `LEAD`) — **opening it turns the M1 edit radio OFF** (M1 and the LEAD page are mutually exclusive, exactly like GNR8)
+  - **Auto-off**: changing channel, TRACK away from MONO, TYPE away from LEAD, or leaving SEQMODE always closes the page (ROOT / BASS / ARP / STRUM and every other track type never take it)
+- **LEDs**: M2 burns **sea green** whenever the edit track is MONO+LEAD — dim while the page is closed, breathing while it is open (touch still lights it white). M3 runs the **same slow hue cycle** as the BASS generator: it is the generator button (sea green on M2 tells the two generator tracks apart)
+- **M3 tap = generate the melody**, **M3 hold = undo** (one-level step snapshot, exactly like GNR8). The header reports `Lead N Steps`
+- **Encoder page** (the page owns ENC2–7; ENC1 octave and ENC8 prob keep their bindings — GATE/VEL live in the M1 edit menu):
+
+| Encoder | Name | Values |
+|---------|------|--------|
+| ENC1 | OCT | playback octave shift of the sequence (unchanged) |
+| ENC2 | **CONTOUR** | melodic shape — **ARCH** (rise to a mid-pattern peak, fall back) · **DESC** (step down across the pattern, wraps) · **WALK** (random ±1/±2 scale-step walk, reflects at the ends), default **ARCH**. **Live**: turning it reshapes the stored sequence immediately — no GEN press needed (see the live-flip bullet below) |
+| ENC3 | **LOW** | bottom of the note range — **C0 · C1 · C2** (MIDI 24 / 36 / 48), shared with GNR8 |
+| ENC4 | **RANGE** | octaves above LOW — **1 · 2 · 3 · 4 · 5**, shared with GNR8 |
+| ENC5 | **CT** | chord-tone vs scale blend for FOLLOW + MAP **ct** — per-note chance to keep the skeleton's in-scale pitch instead of snapping to the feeder chord, 0–100%, default **0** (pure ct; see the CT/GD bullet) |
+| ENC6 | **GD** | guide-tone set depth for FOLLOW + MAP **gd** — **3/7** · **+9** · **+13** · **EXT**, default **3/7** (see the CT/GD bullet) |
+| ENC7 | **DENS** | step density (the shared **FILL** slot), 0–100%, default **50** |
+| ENC8 | PROB | probability of the edit track (unchanged) |
+
+- **Generate (M3 tap)**: rolls every step of the edit sequence's **own pattern length** — the rhythm is the shared **DENSITY** gate (CLASSIC random per step, or **EUCLID** via the shared ALGO slot), the pitch **walks the contour** over the in-scale ladder of the LOW..RANGE window (ARCH/DESC/WALK above), every note snapped into the **current KEY + SCALE**. Notes are **stored** as a skeleton — with FOLLOW OFF the LEAD track just plays that stored contour
+- **CONTOUR is live and non-destructive (A/B/C per contour)**: turning ENC2 flips the stored sequence between contour versions **in place** — no M3 press. Each track keeps a **per-contour cache** (session RAM): the pattern being left is saved under its contour, and the target contour's **last version is restored**. The **first visit** to a contour **deterministically reshapes the existing notes** onto it (same pitch material, reordered — ARCH = mountain fold, DESC = descending, WALK = a fixed zigzag; no randomness; an empty pattern falls back to a fresh generation). So ARCH → DESC → ARCH returns the exact original ARCH melody, and each contour stays revisitable; M3 GEN still fresh-rolls with the current contour. Undo (M3 hold) returns to the pre-flip pattern (one snapshot per flip burst, like the rotate knob)
+- **FOLLOW + MAP (what LEAD is for)**: with **FOLLOW ON** (SEQMODE3 ENC3, the LEAD listener pointing at a chord track) each stored skeleton note is re-resolved onto the **feeder's chord** via the **MAP mode** — the LEAD-friendly modes are **ct** (chord tone, octave follows the contour) and **gd** (guide tone = 3rd/7th, extended by the GD knob). Turn MAP on the GNR8 F2 page (or a LEAD track can share it — MAP is global) and the stored melody re-harmonizes live under the changing progression; the stored steps are never rewritten. Two LEAD-page knobs tune how those modes resolve (bite only when their MAP mode is active):
+  - **CT (ENC5) — chord-tone vs scale blend**: per-note chance to keep the skeleton's own in-scale pitch (its scale-degree identity) instead of snapping to the chord tone. 0% = pure ct (flattens the line to the feeder's tones); 100% = pure skeleton (FOLLOW-OFF pitch, rhythm still follows). Mid values interleave scale color with the chord so the line stops locking to the triad.
+  - **GD (ENC6) — guide-tone set depth**: expands the guide pool. **3/7** = 3rd + 7th (a plain triad feeder has no 7th, so this collapses to the single 3rd); **+9** / **+13** add scale-snapped 9th/13th extensions derived from the chord root; **EXT** also adds the 5th. More notes available → gd stops collapsing to 1–2.
+- **RANGE / LOW reshape the line live (reversibly)**: exactly like BASS, every sounding pitch is **folded by whole octaves into the current LOW..RANGE window** at playback (stored steps untouched, round-trip lossless), then ENC1's octave shift applies
+- Saved/restored with SEQMODE4+REC: the **contour** arrived with the 404-byte extension, the **CT blend** and **GD depth** closed the 649-byte one; the SEQ EEPROM block is **1380 bytes** today (cascade 649 → 616 → … → 260); a config saved by an older build still loads and keeps the LEAD defaults (contour = ARCH, CT = 0%, GD = 3/7). LOW/RANGE/DENSITY ride the shared GNR8 slots. Patterns themselves are still RAM only

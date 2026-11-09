@@ -17,13 +17,22 @@ static const int8_t kLedForPad[NUM_PADS] = {
   40, 28, 13, 41, 39, 30, 14, 15   // pads 40..47
 };
 
+static bool ledsStarted = false;
+
 void initLeds() {
+  // addLeds() allocates the strip's RMT channel, and a second allocation on the
+  // same pin is one of the documented ESP32-S3 RMT failures ("no free tx
+  // channels", then a reboot). Safe mode plus the 'L' command can reach this
+  // again, so make it a one-shot.
+  if (ledsStarted) return;
+  ledsStarted = true;
+
   for (uint8_t p = 0; p < NUM_PADS; p++) ledForPad[p] = kLedForPad[p];
   FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(LED_BRIGHTNESS);
-  // Hard ceiling on strip current: all 42 LEDs white is ~2.5 A, which sags a
-  // 5 V rail fed from USB and resets the board. FastLED then dims the frame
-  // instead of asking for power that is not there.
+  // Hard ceiling on strip current: all 50 LEDs white is ~3 A, which sags a 5 V
+  // rail fed from USB and resets the board. FastLED then dims the frame instead
+  // of asking for power that is not there.
   FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
   FastLED.clear(true);
 }
