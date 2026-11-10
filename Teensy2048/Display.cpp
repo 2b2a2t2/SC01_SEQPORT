@@ -1,6 +1,7 @@
 #include "Config.h"
 #include "Display.h"
 #include "Screen.h"      // the panel-specific drawing layer (128x64 / 480x320)
+#include "Settings.h"    // device settings page (LED / screen brightness, clock)
 #include "Encoders.h"
 #include "Bindings.h"
 #include "SeqClock.h"
@@ -230,6 +231,25 @@ void refreshMainScreen() {
   // knob turn into a full-band repaint: a flash on screen, and a block in the
   // loop long enough to delay the sequencer's notes.
   scrFrameBegin();
+
+  // DEVICE SETTINGS: three knobs and nothing else, so the turns can never
+  // reach a binding behind the page.  Every other cell stays idle ("---" with
+  // no value) and the legend band is blanked - there is nothing to press
+  if (settingsOpen()) {
+    static const char *const sl[SCR_CELLS] = { "LEDS", "SCREEN", "---", "---",
+                                               "CLOCK", "---", "---", "---" };
+    for (uint8_t i = 0; i < SCR_CELLS; i++) {
+      char v[16];
+      settingValueText(i, v, sizeof(v));
+      scrCellLabel(i, sl[i]);
+      scrCellValue(i, v);
+    }
+    for (uint8_t i = 0; i < SCR_LEGENDS; i++) {
+      scrLegend(i, "");
+      scrLegendSel(i, false);
+    }
+    return;
+  }
 
   if (modeBase == MODE_ENC && abltOn() && modeVariant != 3 && linkAlive()) {
     // the eight knobs are the selected device's parameters: the script's
@@ -896,7 +916,9 @@ void drawHeaderText() {
     }
     left = liveLeft;
   }
-  if (drumPageActive()) {
+  if (settingsOpen()) {
+    left = "DEVICE SETTINGS";    // the header tap opened the settings page
+  } else if (drumPageActive()) {
     left = "DRUM PATTERN";       // the drum pattern page owns the row
   } else if (genPageActive()) {
     left = "GENERATOR";          // the generator page owns the encoder row

@@ -38,6 +38,12 @@ static uint8_t sendPage = 0;
 
 static void mark() { bufferDirty = true; }
 
+// The 128x64 header has no backlight dimmer and no touchscreen: the settings
+// page that the panel's header tap opens cannot be reached here, so these two
+// exist only to keep the interface one shape for both panels
+void scrSetBrightness(uint8_t percent) { (void)percent; }
+bool scrTapHeader() { return false; }
+
 void scrBegin() {
   u8g2.begin();
   Wire.setClock(400000);

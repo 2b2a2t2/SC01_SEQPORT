@@ -8,6 +8,9 @@
 void initSeqClock();        // uClock config + usbMIDI handlers; call once in setup
 void seqPumpMidi();         // drain USB MIDI (clock/start/stop); bounded, call often
 void pollSeqClock();        // pump + redraw playhead; call every loop
+void seqStepBreath();       // dispatch a step the ISR queued, right now (also
+                            // called between painted regions: a long panel
+                            // repaint must never hold the beat back)
 uint8_t seqCurrentStep();   // playhead 0..15 (safe to read from loop)
 bool seqIsRunning();
 void seqSendStart();        // emit USB-MIDI System Real-Time Start (0xFA)

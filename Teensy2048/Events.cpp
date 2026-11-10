@@ -12,6 +12,7 @@
 #include "Key4.h"       // KEYMODE4 controls (focus/apply/undo/locks)
 #include "Gen.h"        // GNR8 generator params / produce / rotate
 #include "Skank.h"      // SKANK page: shape name for the header
+#include "Settings.h"    // device settings page: the header tap owns the row
 #include "Drum.h"       // DRUM page: genre/var/lane params + produce
 #include "Link.h"       // ENCABLETONMODE bridge (clips, tracks, Live params)
 
@@ -1186,17 +1187,28 @@ void handleButtonEvents() {
           droppedArp = true;
           if (logRoom(48)) Serial.println("  drum page off (edit target)");
         }
-        stepEditSet(true, (uint8_t)(idx + 1));
-        headerShow(tn[idx]);
-        if (logRoom(48)) {
-          Serial.print("  edit target ");
-          Serial.println(tn[idx]);
+        // A second click on the armed target hands the pads back to the steps
+        // themselves - the radio STAYS on, on the STEPS target.  It used to go
+        // to "Step Edit off", which left the pads dead until EDIT was pressed
+        // again, so leaving TIE cost two presses (MONO had no way out at all
+        // before that: TIE/GLIDE/ACCENT/PROB only left through M1)
+        if (stepEditOn && stepEditTarget == (uint8_t)(idx + 1)) {
+          stepEditSet(true, 0);
+          headerShow("Step Edit on");
+          if (logRoom(48)) Serial.println("  edit target steps");
+        } else {
+          stepEditSet(true, (uint8_t)(idx + 1));
+          headerShow(tn[idx]);
+          if (logRoom(48)) {
+            Serial.print("  edit target ");
+            Serial.println(tn[idx]);
+          }
         }
       } else if (idx >= 2) {               // DRUM/POLY: ACCENT (F3) / PROB (F4)
         if (stepEditOn && stepEditTarget == idx + 1) {
-          stepEditSet(false, 0);
-          headerShow("Step Edit off");
-          if (logRoom(48)) Serial.println("  step edit off");
+          stepEditSet(true, 0);            // back to editing the steps
+          headerShow("Step Edit on");
+          if (logRoom(48)) Serial.println("  edit target steps");
         } else {
           stepEditSet(true, (uint8_t)(idx + 1));
           headerShow(tn[idx]);
@@ -1206,7 +1218,7 @@ void handleButtonEvents() {
           }
         }
       } else if (idx == 0 && seqTrack() == SEQ_TRACK_POLY) {
-        // POLY: F1 cycles FX (5) -> EMB (7) -> off
+        // POLY: F1 cycles FX (5) -> EMB (7) -> back to STEPS (0)
         if (stepEditOn && stepEditTarget == 5) {
           stepEditSet(true, 7);
           char hb[24];
@@ -1214,9 +1226,9 @@ void handleButtonEvents() {
           headerShow(hb);
           if (logRoom(48)) { Serial.print("  edit target emb "); Serial.println(hb); }
         } else if (stepEditOn && stepEditTarget == 7) {
-          stepEditSet(false, 0);
-          headerShow("Step Edit off");
-          if (logRoom(48)) Serial.println("  step edit off");
+          stepEditSet(true, 0);            // third tap: back to the steps
+          headerShow("Step Edit on");
+          if (logRoom(48)) Serial.println("  edit target steps");
         } else {
           stepEditSet(true, 5);
           char hb[24];
@@ -1231,9 +1243,9 @@ void handleButtonEvents() {
         // POLY: F2 = the TYPE target (STEP/STRUM/HAND per step); ENC7 picks
         // the armed value, a tap on a step stamps it (tap again = inherit)
         if (stepEditOn && stepEditTarget == 6) {
-          stepEditSet(false, 0);
-          headerShow("Step Edit off");
-          if (logRoom(48)) Serial.println("  step edit off");
+          stepEditSet(true, 0);            // back to editing the steps
+          headerShow("Step Edit on");
+          if (logRoom(48)) Serial.println("  edit target steps");
         } else {
           stepEditSet(true, 6);
           char hb[24];
@@ -2279,11 +2291,25 @@ void handleEncoderEvents() {
   int16_t ed;
   bool any = false;
   for (uint8_t n = 0; n < MAX_EVENTS_PER_LOOP && popEncEvent(ei, ed); n++) {
-    // SEQMODE3: ANY encoder movement drops the step-pad channel selector
-    // for the rest of the hold - the pads go back to the sequencer (so the
-    // playhead, recorded steps and the pattern length read again) and only
-    // holding SEQ into SEQMODE3 brings the selector up
+    // DEVICE SETTINGS (header tap): ENC1 = LED brightness, ENC2 = screen
+    // brightness, ENC5 = clock source.  Every other knob is idle, so nothing
+    // behind the page can be dialled by accident
+    if (settingsOpen()) {
+      if (ed != 0) settingsAdjust(ei, ed);
+      continue;
+    }
+
+    // SEQMODE3: only the two knobs that change what the step row itself
+    // shows - pattern LENGTH (ENC2) and SPEED (ENC4) - take the pads back
+    // from the channel selector for the rest of the hold (so the playhead,
+    // recorded steps and the pattern length read again).  FOLLOW (ENC3),
+    // INPUT CHANNEL (ENC5), TRACK (ENC6), TYPE (ENC7), TEMPO (ENC8) and OCT
+    // (ENC1) leave the picker up: they are set-up knobs dialled while the
+    // channel is being chosen, and dropping the picker there meant holding
+    // SEQ again just to pick the next channel.  The overlay rows (PREV, bar
+    // pad, held step) keep it too - their ENC2/ENC4 mean something else
     if (ed != 0 && modeBase == MODE_SEQ && modeVariant == 3 &&
+        currentBinding().enc <= ENC_SEQ4 && (ei == 1 || ei == 3) &&
         seq3ChSelDismiss()) {
       refreshAllLeds();
       // the pads are back on the sequencer: the left slot stops claiming

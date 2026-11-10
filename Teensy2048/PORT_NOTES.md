@@ -80,6 +80,36 @@ the strip runs at FastLED brightness 25), and go dark while no family is
 latched. If the pixels were soldered somewhere else on the chain, only
 `ENC_LED_FIRST` moves - the pad table is untouched.
 
+## Device settings (header tap)
+
+Tapping the header band opens the **DEVICE SETTINGS** page - the one page that
+belongs to the hardware rather than to a mode, so it does not care which family
+is latched. Three knobs and nothing else:
+
+| Knob | Setting | Range |
+| --- | --- | --- |
+| ENC1 | `LEDS` - strip brightness | 0..100 %, boot 10 % (the 25/255 the strip has always run at) |
+| ENC2 | `SCREEN` - panel backlight | 0..100 %, boot 100 % |
+| ENC5 | `CLOCK` - clock source | `INTERNAL` (master) / `EXTERNAL` (follow the USB clock), boot INTERNAL |
+
+Every other cell reads `---` and the legend band is blank, so a turn cannot
+reach a binding behind the page; the header shows `DEVICE SETTINGS` and a
+`Tap Header to Close` note. Tap the header again - or change mode family /
+variant - to close it, and the screen it covered comes straight back.
+
+`Settings.cpp` owns the values: `FastLED.setBrightness()` scaled from the
+percentage for the strip, `tft.setBrightness()` for the backlight
+(`scrSetBrightness()`, a no-op on the Teensy), and `seqSetSyncInternal()` for
+the clock - the same switch as SEQMODE3 ENC4, so the two can never disagree.
+The two brightness values live in the last 4 bytes of the settings store
+(2184..2187: magic + LED % + screen % + checksum) and survive a power cycle;
+the clock source stays RAM, like the SEQMODE3 knob it mirrors.
+
+The tap itself is `scrTapHeader()` in `ScreenPanel.cpp`: an edge-detected
+touch that STARTS inside the header band, read at most every 30 ms from
+`loop()`; a panel whose touch controller does not answer simply never taps,
+and a drag that began elsewhere never counts.
+
 ## The clock tick on the SC01 (uClock 2.3.0 + arduino-esp32 3.x)
 
 Symptom: PLAY moved the playhead once, the step's note went on, and nothing

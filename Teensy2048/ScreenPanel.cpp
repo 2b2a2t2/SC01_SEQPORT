@@ -4,6 +4,7 @@
 
 #include "Screen.h"
 #include "PanelSC01.h"
+#include "SeqClock.h"   // seqStepBreath(): the paint loop hands the beat through
 
 #include <math.h>
 #include <stdio.h>
@@ -25,10 +26,12 @@ PanelSC01 tft;
    y 48..63  control legend ->  y 256..319  5 + 4 slots
 
  Fonts: the OLED's 6x12 header font maps to font 4 (26 px) and its 4x6 label
- font to font 2 (16 px); the panel uses exactly those two sizes - 26 px for
- values, the header and the mode row, 16 px for every caption and every legend
- label - so nothing changes size from one cell to the next.  The measured
- widths are why: the widest caption is 13 characters and the widest legend 11.
+ font to font 2 (16 px); the panel uses exactly those two sizes - 26 px for the
+ header and the mode row, 16 px for the whole knob grid (labels AND values,
+ including the number inside a dial ring) and every legend label - so nothing
+ changes size from one cell to the next and a value never swaps face as it
+ grows.  The measured widths are why: the widest caption is 13 characters and
+ the widest legend 11.
 
  Everything is immediate mode, as on the Teensy: the scr*() calls record what
  a cell should say and scrUpdate() draws only what changed, so a knob turn
@@ -58,8 +61,10 @@ static const uint16_t COL_ACCENT = 0x07FF;  // transient text, dial pointer
 // the widest caption (13) is 104 px inside a 108 px box and the widest legend
 // (11) is 88 px inside its slot, with the same face and size for both.
 // ---------------------------------------------------------------------------
-#define FONT_BIG   4   // 26 px: values, header, mode row
-#define FONT_SMALL 2   // 16 px: cell captions, legend labels
+#define FONT_BIG   4   // 26 px: header and mode row only
+#define FONT_SMALL 2   // 16 px: everything in the knob grid - labels AND
+                       // values - plus the legend labels.  The grid has one
+                       // size so a cell never changes face when its value does
 
 // ---------------------------------------------------------------------------
 // Layout: header 0..33, mode row 34..67, knob band 68..255, legend 256..319
@@ -223,15 +228,15 @@ static const char* fullName(const char* s) {
   return s;
 }
 
-// One text run at the role's size (big = value, else caption).  A value is at
-// most 8 characters, so this step is only ever taken by a word no cell carries
-// today - and it stays in the same family at the caption size.
-static void drawText(const char* s, int x, int y, int maxW, uint16_t color,
-                     uint16_t bg, bool big) {
+// One text run at the grid's single size.  Labels and values share it: a long
+// value used to drop from the 26 px face to the 16 px one while its neighbours
+// kept theirs, so a cell changed font as a knob turned.  Nothing shrinks to fit
+// here - the widest label and value a cell can carry both measure under 108 px
+// at 16 px.
+static void drawText(const char* s, int x, int y, uint16_t color, uint16_t bg) {
   if (!s || !s[0]) return;
   tft.setTextDatum(lgfx::textdatum_t::top_left);
-  tft.setTextFont(big ? FONT_BIG : FONT_SMALL);
-  if (big && tft.textWidth(s) > maxW) tft.setTextFont(FONT_SMALL);
+  tft.setTextFont(FONT_SMALL);
   tft.setTextColor(color, bg);
   tft.drawString(s, x, y);
 }
@@ -247,6 +252,10 @@ static void drawDial(int cellX, int cellY, uint8_t val) {
   const int cx = cellX + CELL_W / 2;
   const int cy = cellY + DIAL_CY;
 
+  // The ring is 272 two-pixel drawLine calls.  Batched into one bus
+  // transaction they cost a fraction of what one transaction each did - the
+  // difference is loop() time, and loop() time is sequencer time.
+  tft.startWrite();
   for (int a = 135; a <= 405; a += 2) {
     const float a0 = (float)a * D2R;
     const float a1 = (float)(a + 2) * D2R;
@@ -266,11 +275,12 @@ static void drawDial(int cellX, int cellY, uint8_t val) {
   const int py = (int)lroundf(sinf(av + 1.5708f));
   tft.drawLine(xi, yi, xo, yo, COL_ACCENT);
   tft.drawLine(xi + px, yi + py, xo + px, yo + py, COL_ACCENT);
+  tft.endWrite();
 
   char v[4];
   snprintf(v, sizeof(v), "%u", (unsigned)val);
   tft.setTextDatum(lgfx::textdatum_t::middle_center);
-  tft.setTextFont(FONT_BIG);   // "127" still clears the ring
+  tft.setTextFont(FONT_SMALL);  // the grid's one size: the caption's own face
   tft.setTextColor(COL_TEXT, COL_BG);
   tft.drawString(v, cx, cy);
 }
@@ -348,8 +358,8 @@ static void drawCell(uint8_t i) {
     tft.setTextColor(COL_DIM, COL_BG);
     tft.drawString(cells[i].label, x + CELL_W / 2, y + DIAL_CAPTION_Y);
   } else {
-    drawText(cells[i].label, x + PAD_X, y + LABEL_Y, TEXT_W, COL_DIM, COL_BG, false);
-    drawText(cells[i].value, x + PAD_X, y + VALUE_Y, TEXT_W, COL_TEXT, COL_BG, true);
+    drawText(cells[i].label, x + PAD_X, y + LABEL_Y, COL_DIM, COL_BG);
+    drawText(cells[i].value, x + PAD_X, y + VALUE_Y, COL_TEXT, COL_BG);
   }
   if (col > 0) tft.drawFastVLine(x, y + 8, CELL_H - 16, COL_GRID);
   if (row > 0) tft.drawFastHLine(x, y, CELL_W, COL_GRID);
@@ -421,21 +431,6 @@ static void drawLegendBand() {
   drawLegendRow(5, 4, LEGEND_Y + LEGEND_SLOT_H + LEGEND_SLOT_H / 2);
 }
 
-static void drawMain() {
-  // Knob cells: 4 columns x 2 rows, caption over value (or a CC dial).
-  tft.fillRect(0, MAIN_Y, PANEL_W, CELL_H * 2, COL_BG);
-  for (uint8_t i = 0; i < SCR_CELLS; i++) drawCell(i);
-  for (uint8_t i = 0; i < SCR_CELLS; i++) {
-    cellDirty[i] = false;
-    dialDirty[i] = false;
-  }
-
-  // Control legend: the same 5 + 4 labels as the OLED strip, justified.
-  drawLegendBand();
-  legendDirty = false;
-  mainDirty = false;
-}
-
 // ---------------------------------------------------------------------------
 // Screen interface
 // ---------------------------------------------------------------------------
@@ -448,6 +443,29 @@ void scrBegin() {
   headerDirty = true;
   modeDirty = true;
   mainDirty = true;
+}
+
+// Backlight: the PWM light on GPIO 45 takes 0..255, the page speaks percent
+void scrSetBrightness(uint8_t percent) {
+  if (percent > 100) percent = 100;
+  tft.setBrightness((uint8_t)((uint16_t)percent * 255 / 100));
+}
+
+// Header tap: a touch that STARTS inside the header band, edge-detected so a
+// held finger is one tap and a drag that began elsewhere never counts.  The
+// I2C read is throttled - this runs in loop() - and a missing touch
+// controller (getTouch() returns 0) simply never taps.
+bool scrTapHeader() {
+  static bool down = false;
+  static uint32_t lastMs = 0;
+  uint32_t now = millis();
+  if (now - lastMs < 30) return false;
+  lastMs = now;
+  uint16_t x = 0, y = 0;
+  bool touching = tft.getTouch(&x, &y) > 0;
+  bool tap = touching && !down && (int)y < HEADER_H;
+  down = touching;
+  return tap;
 }
 
 void scrClear() {
@@ -557,33 +575,47 @@ void scrLegendSel(uint8_t i, bool on) {
   legendDirty = true;
 }
 
+// Paint every stale region in this pass, so the panel stays immediate - but hand
+// the sequencer through between regions (seqStepBreath).  A mode change makes
+// the mode row, all eight cells and the legend stale at once, which is tens of
+// milliseconds of SPI (one cell's fill alone is 22 KB).  loop() is what advances
+// the sequencer's steps, so the step that came due inside that frame used to
+// wait for the last region: switching ENCODER <-> SEQUENCER nudged the clock for
+// one beat.  Painting one region per pass fixed the beat and made the screen
+// crawl, so the frame goes out in one pass again and the dispatch in between is
+// what keeps the beat on time (one region of latency, not one frame).
 void scrUpdate() {
   if (modeDirty) {
     drawModes();
     modeDirty = false;
+    seqStepBreath();
   }
   if (mainDirty) {
-    drawMain();
-  } else {
-    bool painted = false;
-    if (legendDirty) {
-      drawLegendBand();
-      legendDirty = false;
-      painted = true;
-    }
+    // No band-wide fill: the eight cell repaints cover MAIN_Y..255 completely
+    // and each one draws its own separators back
     for (uint8_t i = 0; i < SCR_CELLS; i++) {
-      if (cellDirty[i]) {
-        drawCell(i);
-        cellDirty[i] = false;
-        dialDirty[i] = false;  // the full repaint drew the dial too
-        painted = true;
-      } else if (dialDirty[i]) {
-        drawDialOnly(i);
-        dialDirty[i] = false;
-        painted = true;
-      }
+      cellDirty[i] = true;
+      dialDirty[i] = false;
     }
-    (void)painted;
+    legendDirty = true;
+    mainDirty = false;
+  }
+  for (uint8_t i = 0; i < SCR_CELLS; i++) {
+    if (cellDirty[i]) {
+      drawCell(i);
+      cellDirty[i] = false;
+      dialDirty[i] = false;  // the full repaint drew the dial too
+      seqStepBreath();
+    } else if (dialDirty[i]) {
+      drawDialOnly(i);
+      dialDirty[i] = false;
+      seqStepBreath();
+    }
+  }
+  if (legendDirty) {
+    drawLegendBand();
+    legendDirty = false;
+    seqStepBreath();
   }
   if (headerDirty) {
     drawHeader();

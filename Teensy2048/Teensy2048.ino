@@ -48,6 +48,7 @@ Serial (115200): "recal" + Enter = force MPR121 recalibration,
 #include "SeqClock.h"
 #include "Keyboard.h"
 #include "Link.h"        // ENCABLETONMODE bridge (SysEx with the remote script)
+#include "Settings.h"    // device settings page (header tap)
 
 #ifdef use_SC01Plus
 #include <Preferences.h>
@@ -151,7 +152,11 @@ static void bootSettle() {
   bootStage = ST_STABLE;
   bootPrefs.putUInt("stage", ST_STABLE);
   bootPrefs.putUInt("boots", 0);
-  Serial.println("boot: stable");
+  // stack watermark of the task loop() runs in: the number that says whether
+  // a later crash is the loop task running out of stack
+  Serial.printf("boot: stable  heap %uK  stk %u\n",
+                (unsigned)(ESP.getFreeHeap() / 1024),
+                (unsigned)uxTaskGetStackHighWaterMark(NULL));
 }
 
 // The boot page hands the panel to the normal UI a few seconds after bring-up.
@@ -221,6 +226,7 @@ static void setupSc01() {
   // else
   bootMark(ST_MODES);
   initModes();
+  settingsBegin();        // stored LED / screen brightness, applied at boot
 
   bootMark(ST_CLOCK);
   initSeqClock();
@@ -259,6 +265,7 @@ static void setupTeensy() {
   initDisplay();
   initEncoders();
   initModes();
+  settingsBegin();  // stored LED / screen brightness, applied at boot
   initSeqClock();
   linkInit();       // ENCABLETONMODE bridge: SysEx handler + send queue
 
@@ -290,6 +297,7 @@ void loop() {
   pollTouchChips();
   btnUpdate();
   pollEncoders();
+  settingsTouchPoll();   // header tap opens / closes the device settings page
   pollModeLeds();
   uint32_t t2 = micros();
   seqDiagNote(1, t2 - t1);

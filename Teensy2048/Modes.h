@@ -36,9 +36,10 @@ void    keyModeMemSet(uint8_t ch, uint8_t v);
 bool keyChordMode();
 
 // SEQMODE3 step-pad channel overlay: the 16 steps become the edit-channel
-// selector while it is up.  Holding SEQ into SEQMODE3 brings it back; any
-// encoder movement dismisses it for the rest of the hold so the pads show
-// the sequencer again (playhead, recorded/empty, pattern length)
+// selector while it is up.  Holding SEQ into SEQMODE3 brings it back; the
+// LENGTH and SPEED knobs dismiss it for the rest of the hold so the pads show
+// the sequencer again (playhead, recorded/empty, pattern length), every other
+// knob leaves the picker up
 bool seq3ChSelActive();
 void seq3ChSelEnter();               // SEQ held into SEQMODE3
 bool seq3ChSelDismiss();         // encoder moved: true if it was up

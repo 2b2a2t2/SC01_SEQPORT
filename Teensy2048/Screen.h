@@ -57,3 +57,10 @@ void scrLegend(uint8_t i, const char* text);  // "" blanks the slot
 void scrLegendSel(uint8_t i, bool on);
 
 void scrUpdate();   // push whatever changed (one OLED page per call)
+
+// Panel backlight, 0..100 %.  No-op on the 128x64 OLED header, which has no
+// dimmer (and no touchscreen, so the settings page it belongs to is panel-only)
+void scrSetBrightness(uint8_t percent);
+// A fresh tap inside the header band (edge-detected, throttled).  False on the
+// Teensy: there is nothing to tap.
+bool scrTapHeader();

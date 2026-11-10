@@ -32,9 +32,16 @@ static volatile bool pendingStart = false;   // transport (re)start: reset heads
 static bool syncInternal = true;
 static uint16_t tempoBpm = 120;
 
-// fired from uClock's timer ISR on every output PPQN_24 tick (master mode only)
+// fired from uClock's clock tick on every output PPQN_24 tick (master only)
+// clockOutSent counts the 0xF8 bytes that actually left; the DIAG line and the
+// one-time "clock: 0xF8 out" print (seqDiagNote, loop context) report it, so a
+// host that sees no clock can be told apart from a clock never emitted
+static volatile uint32_t clockOutSent = 0;
 static void onSync24Callback(uint32_t tick) {
-  if (syncInternal) usbMIDI.sendClock();   // 0xF8 to the DAW (Ableton slave)
+  if (syncInternal) {
+    usbMIDI.sendClock();   // 0xF8 to the DAW (Ableton slave)
+    ++clockOutSent;
+  }
   (void)tick;
 }
 
@@ -200,6 +207,16 @@ void initSeqClock() {
   // registered after the PPQN setters: setOnSync drops a resolution above
   // output_ppqn, so the output rate has to be in place first
   uClock.setOnSync(uClock.PPQN_24, onSync24Callback);
+  // ...but setOnSync() only stores the callback and its resolution.  The divisor
+  // it is dispatched by (sync_ref = output_ppqn / resolution) lives in
+  // calculateReferencedata(), which the two setters above ran *before* this
+  // registration existed.  Left at 0, handleInternalClock()'s "reset the
+  // counter when it reaches sync_ref" never divides: the callback fired once at
+  // Start and then only when the uint8_t counter wrapped at 256 - clock bytes
+  // about every 1.3 s instead of 48 per second, which a host reports as "no
+  // clock" while the notes keep arriving.  Re-applying the output PPQN is the
+  // library's own way of recomputing it, now with the callback registered.
+  uClock.setOutputPPQN(uClock.PPQN_96);   // recompute sync_ref = 96 / 24 = 4
 
   // boot default = INT master; ENC4 SYNC (SEQMODE3) can switch to EXT slave
   uClock.setClockMode(syncInternal ? uClock.INTERNAL_CLOCK : uClock.EXTERNAL_CLOCK);
@@ -226,26 +243,35 @@ void seqPumpMidi() {
   while (n < 64 && DIN_MIDI.read()) n++;  // same bound for the DIN input
 }
 
-void pollSeqClock() {
-  seqPumpMidi();
-  linkPump();                  // ENCABLETONMODE: one queued SysEx + a chunk
-  linkTick();                  // ...and the HELLO retry / liveness timeout
-
-  // sequencer note housekeeping: the ISR only queues flags, notes go out
-  // here in loop context (no USB/MIDI calls from interrupt code)
+// The ISR only queues a step; the notes go out here, in loop context (no USB/
+// MIDI calls from interrupt code).  pollSeqClock() calls this every pass - and
+// so does the panel's paint loop, between regions (ScreenPanel.cpp): a mode
+// change repaints the header, the mode row and all eight cells, which is tens of
+// milliseconds of SPI, and a step that came due during that frame used to wait
+// for the last region.  At 120 BPM that is a large part of a 16th note, and it
+// was heard as a clock that wobbled for one beat after switching ENC <-> SEQ.
+// Dispatching between regions shortens the wait to one region.  Costs a flag
+// test when nothing is queued.
+void seqStepBreath() {
   noInterrupts();
   uint8_t sAdv = pendingStep;  pendingStep = 255;
   bool st = pendingStop;       pendingStop = false;
   bool sn = pendingStart;      pendingStart = false;
   interrupts();
-  if (st) seqStepStop();             // transport stopped: let every note go
-  else {
-    // due deferred (swung) off-steps run first, so a pass queued for an
-    // earlier instant keeps its time order against this tick
-    seqSwingPoll();
-    if (sn) seqStepAdvance(true);       // start: every track back to its head
-    else if (sAdv != 255) seqStepAdvance(false);
-  }
+  if (st) { seqStepStop(); return; }   // transport stopped: let every note go
+  // due deferred (swung) off-steps run first, so a pass queued for an
+  // earlier instant keeps its time order against this tick
+  seqSwingPoll();
+  if (sn) seqStepAdvance(true);         // start: every track back to its head
+  else if (sAdv != 255) seqStepAdvance(false);
+}
+
+void pollSeqClock() {
+  seqPumpMidi();
+  linkPump();                  // ENCABLETONMODE: one queued SysEx + a chunk
+  linkTick();                  // ...and the HELLO retry / liveness timeout
+
+  seqStepBreath();             // queued step -> notes (see above)
   keyMonoPoll();               // live MONO-track keyboard voice (TRACK/TYPE)
   keyOctTrackPoll();           // per-track keyboard octave (KEYMODE, all variants)
   seqGatePoll();               // track gate note-offs (MONO step-edit)
@@ -1037,6 +1063,13 @@ void seqTogglePlay() {
 
 // section = 0 pump, 1 touch/inputs, 2 events, 3 display; report worst >3ms once/s
 void seqDiagNote(uint8_t section, uint32_t us) {
+  // one line, once, when the internal clock's first 0xF8 has really gone out.
+  // Its absence in the log means uClock never reached onSync24Callback.
+  static bool clockOutLogged = false;
+  if (!clockOutLogged && clockOutSent > 0) {
+    clockOutLogged = true;
+    if (Serial.availableForWrite() > 40) Serial.println("clock: 0xF8 out");
+  }
   static uint32_t worst[4] = {0, 0, 0, 0};
   static uint32_t lastReport = 0;
   if (section > 3) return;
@@ -1053,7 +1086,20 @@ void seqDiagNote(uint8_t section, uint32_t us) {
     Serial.print(" ev=");
     Serial.print(worst[2]);
     Serial.print(" dsp=");
-    Serial.println(worst[3]);
+    Serial.print(worst[3]);
+    Serial.print(" clk=");
+    Serial.print((unsigned long)clockOutSent);
+    Serial.print(seqIsSyncInternal() ? " sync=INT" : " sync=EXT");
+#ifdef use_SC01Plus
+    // Free bytes left on loop()'s stack, worst case so far.  A loop task that
+    // runs out does not always trip the canary: it writes over whatever lives
+    // past the stack and the CPU later jumps into it, which is exactly the
+    // "IllegalInstruction" with a nonsense backtrace.  This number has to be
+    // seen before the reset to tell the two apart.
+    Serial.print(" stk=");
+    Serial.print((unsigned)uxTaskGetStackHighWaterMark(NULL));
+#endif
+    Serial.println();
   }
   worst[0] = worst[1] = worst[2] = worst[3] = 0;
 }

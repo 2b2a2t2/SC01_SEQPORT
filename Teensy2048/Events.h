@@ -59,7 +59,10 @@ void cfgStoreCommit();
 // is selected (0=STEPS, 1=TIE, 2=GLIDE, 3=ACCENT, 4=PROB; POLY adds
 // 5=FX on F1 and 6=TYPE on F2), and whether an attribute target is engaged
 // for the current track (MONO = 1..4, POLY = 3/4/5/6, DRUM = ACCENT/PROB
-// only).  The probability % itself is per track (ENC8 -> seqProbAdjust /
+// only).  A second click on the armed target leaves it on every track type:
+// the radio goes off and the pads are steps again (MONO included, which used
+// to offer TIE/GLIDE/ACCENT/PROB with no way back but the M1 EDIT key).
+// The probability % itself is per track (ENC8 -> seqProbAdjust /
 // seqProbPct in Keyboard.h)
 bool    stepEditIsOn();
 uint8_t stepEditSel();

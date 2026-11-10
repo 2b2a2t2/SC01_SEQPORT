@@ -6,6 +6,13 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### SEQMODE3 channel picker
+
+- **Only `LENGTH` and `SPEED` take the step pads back from the channel selector** — those two
+  change what the step row shows, so the pads return to the sequencer as before. Dialling
+  `OCT`, `FOLLOW`, `INPUT CHANNEL`, `TRACK`, `TYPE` or `TEMPO` now leaves the yellow picker up,
+  so several channels can be picked in one hold (`modes/seqmode.md`).
+
 ### Ableton Live bridge
 
 - **A clip press with no link now says `Link Down Check MIDI`** instead of repeating
