@@ -12,7 +12,8 @@
 //   y  0..15  header strip   ->  y   0..33   header (34 px, accent rule)
 //   (no OLED counterpart)    ->  y  34..67   ENC / SEQ / KEY mode row
 //   y 16..47  two knob rows  ->  y  68..255  4 columns x 2 rows, 120x94
-//   y 48..63  control legend ->  y 256..319  5 + 4 slots
+//   y 48..63  control legend ->  y 256..319  5 + 4 buttons (same chip as the
+//                                           mode row, 90x26 rounded rect)
 //
 // The mode row is new: the OLED showed the mode word in the header, which on
 // a 480 px strip left no room for the parameter announcements, so the three

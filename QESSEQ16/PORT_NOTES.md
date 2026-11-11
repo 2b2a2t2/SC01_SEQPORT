@@ -32,7 +32,7 @@ Both defined, or neither, stops the build with an `#error`.
 
 | File | What the SC01 branch does |
 | --- | --- |
-| `Teensy2048.ino` | moves `Wire` to GPIO 10/11 (the core's default 8/9 are two of the panel's data lines) |
+| `QESSEQ16.ino` | moves `Wire` to GPIO 10/11 (the core's default 8/9 are two of the panel's data lines) |
 | `Display.cpp` | still owns every label and value, but draws through `Screen.h` instead of u8g2 directly — the SC01 build shows the 480x320 design, not a scaled 128x64 picture |
 | `Encoders.cpp` | TCA9548A (0x70..0x77 probe, this board answers at 0x71) + AS5600 angle, converted to 96 counts/rev so 1 detent = 4 counts like the Teensy |
 | `TouchChips.h/.cpp` | polled MPR121 every 20 ms instead of IRQ-driven; every address is tried, a missing chip is reported instead of aborting the loop |
@@ -196,7 +196,7 @@ host.
 The first hardware boot after the port put the panel and the strip up and then
 reset, with nothing on screen naming the step it died in — and the old path
 could not report it either: a missing MPR121 hung in `while (1)`, which looks
-exactly like the fault it was meant to describe. `Teensy2048.ino` now carries
+exactly like the fault it was meant to describe. `QESSEQ16.ino` now carries
 the mechanism `SC01_SEQPORT.ino` was built around:
 
 * the bring-up stage reached is written to **NVS before each step runs**, so

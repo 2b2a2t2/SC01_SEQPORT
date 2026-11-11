@@ -5,7 +5,7 @@ _Docs home: [Teensy2048](README.md) · [Cheat sheet](cheatsheet.md) · [Glossary
 
 1. Install Teensyduino (Arduino IDE or VS Code + PlatformIO)
 2. Install libraries: FastLED, U8g2, Encoder, Adafruit_MPR121, uClock
-3. Open `Teensy2048.ino`
+3. Open `QESSEQ16.ino`
 4. Select **Teensy 4.1**, **USB Type: MIDI**
 5. Compile & upload
 
@@ -33,4 +33,4 @@ the shorthand codes the strip must not use again (`PROB`, `mot`, `klock`, `GNR8`
 …), and it lists the snprintf-built messages whose worst case would overflow.
 Run it after touching a message (exit status 1 = findings).
 
-**No-compile fallback** — an image built elsewhere can be flashed without the toolchain: drag `Teensy2048.ino.hex` onto the Teensy Loader window and press its button, or `teensy_loader_cli -mmcu=imxrt1062 -w Teensy2048.ino.hex -v`. The loader only writes bytes, it does not build, so the `.hex` must come from the commit you mean to run. This also needs the board on a USB port of the machine running the command: a cloud/remote session can compile and lint the tree but has no USB, so the flash itself always happens on the local checkout.
+**No-compile fallback** — an image built elsewhere can be flashed without the toolchain: drag `QESSEQ16.ino.hex` onto the Teensy Loader window and press its button, or `teensy_loader_cli -mmcu=imxrt1062 -w QESSEQ16.ino.hex -v`. The loader only writes bytes, it does not build, so the `.hex` must come from the commit you mean to run. This also needs the board on a USB port of the machine running the command: a cloud/remote session can compile and lint the tree but has no USB, so the flash itself always happens on the local checkout.

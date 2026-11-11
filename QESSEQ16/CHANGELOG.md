@@ -6,6 +6,23 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### SC01 panel type: Nasalization
+
+- **The 480x320 panel draws in Nasalization** — the OTF cannot be rendered by the panel, so it
+  ships converted to LovyanGFX's compact bitmap font (1 bpp, ASCII 0x20-0x7f) and embedded in
+  flash (`fonts/`), with no filesystem or SD card needed: 16 px for the header band, 10 px for
+  the mode row, every cell caption and value and every legend button. The 10 px grid size is
+  what the fixed furniture allows — `PROBABILITY` is 85 px at 10 px against a 104 px button.
+  The built-in bitmap faces stay as the fallback if the font ever fails to load, so a bad font
+  cannot blank the panel. The `.c`/`.fcfg` files in `WipidiMSite/nasalization/` are LVGL output
+  and are not used here.
+
+### `PREV` / `NEXT` LEDs
+
+- **`PREV` and `NEXT` now light a dim yellow-green in every mode** instead of sitting dark, so the
+  two page keys can be found by position without reading the screen. KEYMODE2 keeps the dim
+  green `NEXT` it already had from the chord row (`reference/leds.md`).
+
 ### SEQMODE3 channel picker
 
 - **Only `LENGTH` and `SPEED` take the step pads back from the channel selector** — those two
@@ -40,7 +57,7 @@ de-facto version marker is the size of the saved-settings block (see
   unaffected; state-only, never clock. The companion script ships as-is and is never edited
   here: the phone app loads the same files, so bridge behaviour is fixed in firmware.
   `Link.h/.cpp` (new), `Keyboard`, `Bindings`, `Modes`, `Events`, `Display`, `SeqClock`,
-  `Teensy2048.ino`, `Remote Scripts/Teensy2048/` (new), docs (`modes/link.md` new); patterns
+  `QESSEQ16.ino`, `Remote Scripts/Teensy2048/` (new), docs (`modes/link.md` new); patterns
   and overlay state are RAM only — **no EEPROM block change**.
 
 ### Sequencer

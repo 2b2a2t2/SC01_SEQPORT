@@ -396,7 +396,7 @@ void harmFeederChanged(uint8_t ch0) {
   }
 }
 
-// run every marked re-bake (Teensy2048.ino calls this once per loop pass,
+// run every marked re-bake (QESSEQ16.ino calls this once per loop pass,
 // right before displayUpdate, so the drawn step grid and the next playhead
 // pass already see the re-derived chords).  The edit focus is switched by
 // direct assignment and restored around the pass - seqSetEditChannel would

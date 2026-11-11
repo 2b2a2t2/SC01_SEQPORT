@@ -41,7 +41,8 @@ void clearMainScreen() {
 //                        row2 y62  the F row - labels follow the context
 
 // context-sensitive legend: what each control does RIGHT NOW
-// (i 0..4 = PREV NEXT M1 M2 M3 top row, i 5..8 = F row below)
+// (i 0..4 = PREV NEXT M1 M2 M3 top row, i 5..8 = F row below; the panel gives
+// PREV/NEXT a row of their own, so it shows them as 0-1 / 2-4 / 5-8)
 static const char* ctrlLegend(uint8_t i) {
   if (i > 8) return "";
   bool key2 = keyBehaviorVariant() == 2;   // quality / extension momentaries

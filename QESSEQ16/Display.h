@@ -9,7 +9,7 @@
 // slots.  The drawing itself lives behind Screen.h, so the same content runs
 // on the Teensy's 128x64 SSD1306 and on the SC01 Plus 480x320 panel - the
 // latter with the layout SC01_SEQPORT.ino was designed on (header band, mode
-// row, 4x2 cells of 120x94, legend band, CC dials).
+// row, 4x2 cells of 120x75, three rows of legend buttons, CC dials).
 
 #define HEADER_MS   2500
 

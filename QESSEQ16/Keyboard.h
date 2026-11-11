@@ -453,7 +453,7 @@ int            stepSnapshotRestore();  // 0 = restored (switches back the ch), -
 bool           stepChordSame(uint8_t step, const uint8_t *notes, uint8_t n);
 // HARM auto re-bake: harmFeederChanged marks every POLY+HARM track that
 // feeds from ch0 (FOLLOW on); harmRebakePoll runs the marked bakes - called
-// once per loop pass from Teensy2048.ino right before the display draw, so
+// once per loop pass from QESSEQ16.ino right before the display draw, so
 // a burst of feeder writes costs one Viterbi pass instead of one per step
 void           harmFeederChanged(uint8_t ch0);
 void           harmRebakePoll();

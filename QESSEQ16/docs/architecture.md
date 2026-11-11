@@ -16,7 +16,7 @@ _Docs home: [Teensy2048](README.md) · [Cheat sheet](cheatsheet.md) · [Glossary
 
 | File | Responsibility |
 |------|----------------|
-| `Teensy2048.ino` | Setup, main loop, timing diagnostics |
+| `QESSEQ16.ino` | Setup, main loop, timing diagnostics |
 | `Buttons.h/cpp` | Touch handling, debounce, LED color hook, pad groups |
 | `TouchChips.h/cpp` | MPR121 init, IRQ-driven polling |
 | `Display.h/cpp` | OLED rendering (header + main screen), paged I2C write |

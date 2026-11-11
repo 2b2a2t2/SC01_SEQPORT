@@ -26,6 +26,16 @@ static const int TEXT_W = CELL_W - PAD_X * 2;      // usable text width
 static const int LABEL_Y = 24;                     // caption top inside a cell
 static const int VALUE_Y = 44;                     // value top inside a cell
 
+// One button geometry for both bands: the ENCODER/SEQUENCER/KEYBOARD row and
+// the control legend draw the same chip, so they read as one family of
+// controls. 90x26 is the legend slot (96x32) minus a 3 px margin all round,
+// which leaves 6 px between neighbouring chips; the mode row centres the same
+// chip in its 160 px third of the screen.
+static const int BTN_W = LEGEND_COL_W - 6;  // 90
+static const int BTN_H = 26;
+static const int BTN_R = 6;                 // corner radius
+static const int BTN_PAD = 12;              // text room before dropping a font
+
 // Dial geometry inside a cell (ring outer radius 26, caption in the notch)
 static const int DIAL_CY = 44;
 static const int DIAL_R = 26;
@@ -183,7 +193,9 @@ static void drawHeader() {
   tft.drawString(right, SCREEN_W - 12, noteY);
 }
 
-// Mode row: three always-visible mode buttons, the active one filled.
+// Mode row: three always-visible mode buttons, the active one filled. The
+// chip is the legend's, so the two bands match: same 90x26 rounded rect, same
+// radius, same inactive fill and dim caption - only the accent fill differs.
 static void drawModes() {
   tft.fillRect(0, MODE_Y, SCREEN_W, MODE_H, COL_BG);
   tft.drawFastHLine(0, MODE_Y + MODE_H - 1, SCREEN_W, COL_GRID);
@@ -191,16 +203,14 @@ static void drawModes() {
   const int bw = SCREEN_W / MODE_COUNT;  // 160
   tft.setTextDatum(lgfx::textdatum_t::middle_center);
   for (uint8_t i = 0; i < MODE_COUNT; i++) {
-    const int bx = i * bw + 4;
-    const int by = MODE_Y + 4;
-    const int bwv = bw - 8;
-    const int bh = MODE_H - 8;
+    const int bx = i * bw + (bw - BTN_W) / 2;       // centred in the third
+    const int by = MODE_Y + (MODE_H - BTN_H) / 2;   // 4 px above and below
     const bool on = (i == activeMode);
-    tft.fillRoundRect(bx, by, bwv, bh, 6, on ? COL_ACCENT : COL_BAND);
+    tft.fillRoundRect(bx, by, BTN_W, BTN_H, BTN_R, on ? COL_ACCENT : COL_BAND);
     tft.setTextColor(on ? COL_BG : COL_DIM, on ? COL_ACCENT : COL_BAND);
     tft.setFont(&lgfx::fonts::FreeSans12pt7b);
-    if (tft.textWidth(modeLabel[i]) > bwv - 12) tft.setTextFont(2);
-    tft.drawString(modeLabel[i], bx + bwv / 2, by + bh / 2);
+    if (tft.textWidth(modeLabel[i]) > BTN_W - BTN_PAD) tft.setTextFont(2);
+    tft.drawString(modeLabel[i], bx + BTN_W / 2, by + BTN_H / 2);
   }
   tft.setTextFont(2);  // leave a bitmap font selected for later draws
 }
@@ -251,16 +261,24 @@ static const int LEGEND_SLOT_H = (SCREEN_H - LEGEND_Y) / 2;  // 32
 static int legendSlotX(uint8_t i) { return (i < 5 ? i : i - 5) * LEGEND_COL_W; }
 static int legendSlotY(uint8_t i) { return LEGEND_Y + (i < 5 ? 0 : LEGEND_SLOT_H); }
 
+// One legend slot: the same chip the mode row draws, centred in its 96x32
+// slot, so the control legend reads as a row of buttons instead of a flat
+// band. An empty slot erases its chip and draws nothing back.
 static void drawLegendSlot(uint8_t i) {
-  tft.fillRect(legendSlotX(i), legendSlotY(i), LEGEND_COL_W, LEGEND_SLOT_H, COL_BAND);
+  const int sx = legendSlotX(i);
+  const int sy = legendSlotY(i);
+  const int bx = sx + (LEGEND_COL_W - BTN_W) / 2;   // 3 px margin each side
+  const int by = sy + (LEGEND_SLOT_H - BTN_H) / 2;  // 6 px between the rows
+
+  tft.fillRect(sx, sy, LEGEND_COL_W, LEGEND_SLOT_H, COL_BG);
   if (!legendText[i][0]) return;
 
+  tft.fillRoundRect(bx, by, BTN_W, BTN_H, BTN_R, COL_BAND);
   tft.setTextDatum(lgfx::textdatum_t::middle_center);
   tft.setTextColor(COL_DIM, COL_BAND);
   tft.setFont(&lgfx::fonts::FreeSans12pt7b);
-  if (tft.textWidth(legendText[i]) > LEGEND_COL_W - 10) tft.setTextFont(2);
-  tft.drawString(legendText[i], legendSlotX(i) + LEGEND_COL_W / 2,
-                 legendSlotY(i) + (i < 5 ? 16 : 14));
+  if (tft.textWidth(legendText[i]) > BTN_W - BTN_PAD) tft.setTextFont(2);
+  tft.drawString(legendText[i], bx + BTN_W / 2, by + BTN_H / 2);
   tft.setTextFont(2);  // leave a bitmap font selected for later draws
 }
 
@@ -287,8 +305,11 @@ static void drawMain() {
   for (uint8_t i = 0; i < CELL_COUNT; i++) drawCell(i);
   cellDirty[0] = false;
 
-  // Control legend: same 5 + 4 slots as the OLED strip, two rows.
-  tft.fillRect(0, LEGEND_Y, SCREEN_W, SCREEN_H - LEGEND_Y, COL_BAND);
+  // Control legend: same 5 + 4 slots as the OLED strip, two rows. The band is
+  // background-coloured so the chips stand out of it the way the mode buttons
+  // stand out of the mode row; the hairline keeps the grid above it separate.
+  tft.fillRect(0, LEGEND_Y, SCREEN_W, SCREEN_H - LEGEND_Y, COL_BG);
+  tft.drawFastHLine(0, LEGEND_Y, SCREEN_W, COL_GRID);
   for (uint8_t i = 0; i < LEGEND_COUNT; i++) {
     drawLegendSlot(i);
     legendDirty[i] = false;

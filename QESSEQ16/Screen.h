@@ -13,12 +13,14 @@
    ScreenOled.cpp   Teensy 4.1, SSD1306 128x64 - the layout the firmware was
                     written on (header, 4x2 label/value cells, 5+4 legend)
    ScreenPanel.cpp  SC01 Plus, ST7796 480x320 - the SC01_SEQPORT.ino layout
-                    (header band, ENC/SEQ/KEY mode row, 4x2 cells of 120x94,
-                    5+4 legend slots, CC dials)
+                    (header band, ENC/SEQ/KEY mode row, 4x2 cells of 120x75,
+                    three legend rows of buttons - PREV/NEXT, then 3 + 4 -
+                    CC dials)
 
  The vocabulary is the OLED's - eight cells (four per row), nine legend slots
  - because that is what Display.cpp's layout logic produces on either panel.
- The 480x320 panel simply gives each cell 120x94 px to say it in.
+ The 480x320 panel simply gives each cell 120x75 px to say it in, and splits
+ the nine slots over three rows instead of two.
 *****************************************************************************/
 
 #define SCR_CELLS    8

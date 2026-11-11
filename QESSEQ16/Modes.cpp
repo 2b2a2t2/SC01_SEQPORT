@@ -35,6 +35,7 @@ static const char* fullNames[4] = { "---", "ENCODER", "SEQUENCER", "KEYBOARD" };
 #define DRUM_KEY_HIT  56  // ...a note the playhead sounds: dim green blink
 #define DRUM_KEY_MUTE 48  // ...a muted drum voice: dim orange
 #define STEP_DIM 32   // step pad background (dark blue, barely visible)
+#define PAGE_KEY_DIM 20  // PREV / NEXT identity colour (dim yellow-green)
 
 // semitone index (0=C..11=B) for LEDs 25..41; -1 = LEDs 32..36 (not keys)
 static const int8_t kbPitchIdx[17] = {
@@ -776,6 +777,16 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
       c.r = c.r / 2;                  //   (purer and a touch darker)
       c.b = c.b / 2;
     }
+    return c;
+  }
+  // PREV / NEXT wear one fixed identity colour everywhere, so the two page
+  // keys can be found without reading the screen: dim dark yellow.  KEYMODE2
+  // is the exception - its NEXT belongs to the chord row above and keeps the
+  // dim green, and only PREV reaches this block there
+  if (led == groupControls[0] || led == groupControls[1]) {
+    if (isTouched) return CRGB::White;
+    CRGB c = CRGB(190, 210, 0);   // yellow-green: red just under green, no blue
+    c.nscale8(PAGE_KEY_DIM);      // ~15,16,0: the dimmest lit pad on the strip
     return c;
   }
   // KEYMODE4 M1: the write state - dim red = AUDITION (proposals only,

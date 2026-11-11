@@ -15,7 +15,7 @@
                    behind the knobs carrying the active mode family's colour)
 
 Everything except the hardware layer (display, encoders, touch, LEDs, and the
-Wire/panel bring-up in Teensy2048.ino) is shared, unmodified code.
+Wire/panel bring-up in QESSEQ16.ino) is shared, unmodified code.
 *****************************************************************************/
 
 //#define use_Teensy
