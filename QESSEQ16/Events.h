@@ -57,9 +57,10 @@ void cfgStoreCommit();
 
 // SEQMODE step-edit radio (variants 1/2/4): is the edit on, which target
 // is selected (0=STEPS, 1=TIE, 2=GLIDE, 3=ACCENT, 4=PROB; POLY adds
-// 5=FX on F1 and 6=TYPE on F2), and whether an attribute target is engaged
-// for the current track (MONO = 1..4, POLY = 3/4/5/6, DRUM = ACCENT/PROB
-// only).  A second click on the armed target leaves it on every track type:
+// 5=FX on F1 and 6=TYPE on F2, 8=RATCHET on F2 for DRUM), and whether an
+// attribute target is engaged
+// for the current track (MONO = 1..4, POLY = 3/4/5/6/7, DRUM = ACCENT/PROB
+// /RATCHET only).  A second click on the armed target leaves it on every track type:
 // the radio goes off and the pads are steps again (MONO included, which used
 // to offer TIE/GLIDE/ACCENT/PROB with no way back but the M1 EDIT key).
 // The probability % itself is per track (ENC8 -> seqProbAdjust /
@@ -76,11 +77,18 @@ const char* stepFxSelName();  // its display name (sus2 ... color)
 void    stepTypeArmAdjust(int16_t counts);
 uint8_t stepTypeArm();
 const char* stepTypeArmName();   // "STEP" / "STRUM" / "HAND"
+// RATCHET arm of the DRUM F2 target (target 8): which count a pad tap
+// stamps onto the step's SELECTED PART (2..4 repeats inside that one step;
+// each voice keeps its own count, tapping a part that already carries the
+// count clears it).  ENC6 moves it while target 8 is engaged, 4 counts = 1
+// step, clamped, no wrap
+void    stepRatArmAdjust(int16_t counts);
+uint8_t stepRatArmSel();
 
-// HOLD F3 in SEQMODE (variants 1/2/4): ENC6 edits the track's ACCENT
-// velocity instead of its default velocity (release restores ENC6)
-void    f3AccentHold(bool on);
-bool    f3AccentActive();
+// ACCENT velocity of the edit track in SEQMODE (variants 1/2/4): ENC7 owns
+// it for every track type, as long as nothing else claims that slot - the
+// POLY step-edit FX / TYPE / EMB targets and the M2 pages binding ENC7
+bool    seqAccentEncCtx();
 
 // SEQMODE M2 (variants 1/2/4) on a MONO+ARP edit track: a click toggles
 // the ARP encoder page - ENC2 = span, ENC3 = skip rests, ENC4 = mode,

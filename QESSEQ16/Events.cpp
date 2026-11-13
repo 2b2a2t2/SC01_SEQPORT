@@ -73,7 +73,8 @@ static bool stepEditAccCtx() {
 
 // true while an ATTRIBUTE target is engaged for the current track: MONO =
 // TIE/GLIDE/ACCENT/PROB (1..4), POLY = ACCENT/PROB plus the FX target (5)
-// and the TYPE target (6), EMB target (7), DRUM = ACCENT/PROB (3,4).  A target never
+// and the TYPE target (6), EMB target (7), DRUM = ACCENT/PROB (3,4) plus the
+// RATCHET target (8).  A target never
 // matches a track that cannot edit it (a POLY FX/TYPE/EMB selection does not
 // arm MONO/DRUM pads).  Drives the header label, the step pulse and the
 // attribute pad mode
@@ -84,7 +85,8 @@ bool stepEditActive() {
   if (trk == SEQ_TRACK_POLY)
     return stepEditTarget == 5 || stepEditTarget == 6 || stepEditTarget == 7 ||
            (stepEditTarget >= 3 && stepEditTarget <= 4);
-  return stepEditTarget >= 3 && stepEditTarget <= 4;
+  return (stepEditTarget >= 3 && stepEditTarget <= 4) ||
+         stepEditTarget == 8;
 }
 
 static void stepEditSet(bool on, uint8_t target) {
@@ -116,6 +118,29 @@ uint8_t stepTypeArm() { return stepTypeArmV; }
 const char* stepTypeArmName() {
   static const char *const n[3] = { "STEP", "STRUM", "HAND" };
   return n[stepTypeArmV % 3];
+}
+
+// which per-VOICE RATCHET count the F2/arm flow stamps on a DRUM track while
+// the RATCHET target (8) is engaged: 2, 3 or 4 repeats inside the step,
+// stamped on the step's SELECTED PART (a stamp clears back to a single hit).
+// RAM only, like the FX / TYPE arms - it survives takes, not power
+static uint8_t stepRatArmV = 2;
+
+uint8_t stepRatArmSel() { return stepRatArmV; }
+
+// 4 counts = 1 count step, clamped 2..4 (no wrap - the ends are the values,
+// not a cycle point)
+void stepRatArmAdjust(int16_t counts) {
+  static int16_t ratRes = 0;
+  ratRes += counts;
+  int16_t st = 0;
+  while (ratRes >= 4) { ratRes -= 4; st++; }
+  while (ratRes <= -4) { ratRes += 4; st--; }
+  if (!st) return;
+  int v = (int)stepRatArmV + st;
+  if (v < 2) v = 2;
+  if (v > 4) v = 4;
+  stepRatArmV = (uint8_t)v;
 }
 
 // --- SEQMODE M2 "ARP" page (variants 1/2/4) -------------------------------
@@ -426,20 +451,17 @@ void stepChainDisarm() { chainArmed = false; }
 bool stepChainArmed()  { return chainArmed && genTrackCtx() &&
                                  stepEditTarget == 1; }
 
-// HOLD F3 in SEQMODE: ENC6 rebinds from the track's default velocity to
-// its ACCENT velocity (the quick tap still picks the ACCENT target)
-static bool f3AccentSel = false;
-
-void f3AccentHold(bool on) { f3AccentSel = on; }
-
-// composite: the flag can outlive a mid-hold mode switch - the rebind
-// only applies while the panel is still in SEQMODE variants 1/2/4 (=
-// everywhere the hold is offered).  SEQMODE3 owns ENC6 = TRACK, so the
-// rebind must NOT reach it - hence "!= 3", not "== 3": with "== 3" the
-// hold did nothing in 1/2/4 (no ACC label, no value, dead knob) and a
-// stale flag then painted ACC over SEQMODE3's TRACK row.
-bool f3AccentActive() {
-  return f3AccentSel && modeBase == MODE_SEQ && modeVariant != 3;
+// ACCENT velocity of the edit track in SEQMODE: ENC7 in variants 1/2/4, for
+// EVERY track type (the F3 hold that used to borrow ENC6 is gone - one knob,
+// one job).  Composite, like every binding here: the POLY step-edit arms
+// (FX / TYPE / EMB) own ENC7 while those targets are engaged, and the M2
+// pages that bind ENC7 (GNR8 TIE, ARP INSERT, LEAD DENSITY, SKANK TES%) sit
+// earlier in the encoder chain, so they win the slot whenever they are open
+bool seqAccentEncCtx() {
+  if (modeBase != MODE_SEQ || modeVariant == 3) return false;
+  if (stepEditOn && seqTrack() == SEQ_TRACK_POLY &&
+      stepEditTarget >= 5 && stepEditTarget <= 7) return false;
+  return true;
 }
 
 // a SEQ channel switch always lands back in step edit on the new channel:
@@ -743,6 +765,17 @@ void handleButtonEvents() {
             // ENC7 selects which param to edit, tap cycles the value
             on = stepEmbToggle(stp);
             snprintf(ab, sizeof(ab), "Step %u Embed", stp + 1);
+          } else if (stepEditTarget == 8) {
+            // DRUM RATCHET target: stamp the ENC6-armed count (2/3/4) on the
+            // SELECTED PART of the step - every voice keeps its own count, so
+            // a stamped hat rolls while the kick / snare beside it play
+            // straight.  Tapping a part that already carries that count
+            // clears it back to a single hit
+            on = stepRatchetStamp(stp, stepRatArmSel());
+            char rn[8];
+            if (on) snprintf(rn, sizeof(rn), "%u", stepRatArmSel());
+            else    snprintf(rn, sizeof(rn), "off");
+            snprintf(ab, sizeof(ab), "%s Ratchet %s", drumPartName(), rn);
           } else {
             uint8_t att = attOf[stepEditTarget - 1];
             on = stepAttrToggle(stp, att);
@@ -1004,10 +1037,15 @@ void handleButtonEvents() {
           uint8_t t = (stepEditTarget >= 3) ? stepEditTarget : 3;
           if (t == 5 && seqTrack() != SEQ_TRACK_POLY) t = 3; // FX is POLY-only
           if (t == 6 && seqTrack() != SEQ_TRACK_POLY) t = 3; // TYPE is POLY-only
+          if (t == 8 && seqTrack() != SEQ_TRACK_DRUM) t = 3; // RATCHET is DRUM-only
           stepEditSet(true, t);
           if (t == 3) headerShow("Accent");
           else if (t == 4) headerShow("Probability");
-          else {
+          else if (t == 8) {
+            char hb[24];
+            snprintf(hb, sizeof(hb), "Ratchet %u", stepRatArmSel());
+            headerShow(hb);
+          } else {
             char hb[24];
             snprintf(hb, sizeof(hb), "%s %s", t == 6 ? "Step Type" : "Step FX",
                      t == 6 ? stepTypeArmName() : stepFxName(stepFxType));
@@ -1016,38 +1054,10 @@ void handleButtonEvents() {
           if (logRoom(80)) {
             Serial.print("  step edit on (");
             Serial.println(t == 3 ? "accent)" : t == 4 ? "prob)"
-                           : t == 6 ? "type)" : "fx)");
+                           : t == 6 ? "type)" : t == 8 ? "ratchet)" : "fx)");
           }
         }
         refreshAllLeds();
-      }
-    }
-
-    // HOLD F3 in SEQMODE: ENC6 becomes the track's ACCENT velocity knob
-    // (the quick tap below still picks the ACCENT target - a hold ends in
-    // EV_RELEASED and never reaches EV_CLICKED).  The strum ADDS row owns
-    // F3 while it is open (add9), the GNR8 page while it is open (RANGE)
-    // and the ARP page (F3 = the generative sub-page) - the accent hold
-    // stays out of all of their ways
-    if (modeBase == MODE_SEQ && modeVariant != 3 && !strumFRowActive() &&
-        !genPageActive() && !drumPageActive() && !arpPageActive() &&
-        kl >= groupControls[5] && kl <= groupControls[8] &&
-        (uint8_t)(kl - groupControls[5]) == 2) {
-      if (ev == EV_PRESSED) {
-        f3AccentHold(true);
-        headerShow("Accent Velocity");
-        refreshMainScreen();
-        if (logRoom(48)) {
-          Serial.print("  accent vel ");
-          Serial.println(seqAccentVelocity());
-        }
-      } else if (ev == EV_RELEASED && f3AccentSel) {
-        f3AccentHold(false);
-        refreshMainScreen();
-        if (logRoom(48)) {
-          Serial.print("  accent vel done ");
-          Serial.println(seqAccentVelocity());
-        }
       }
     }
 
@@ -1254,6 +1264,26 @@ void handleButtonEvents() {
           if (logRoom(48)) {
             Serial.print("  edit target type ");
             Serial.println(stepTypeArmName());
+          }
+        }
+      } else if (idx == 1 && seqTrack() == SEQ_TRACK_DRUM) {
+        // DRUM: F2 = the RATCHET target (2/3/4 repeats inside one step, per
+        // voice).  ENC6 picks the armed count, a tap stamps it on the step's
+        // SELECTED PART; tapping a part that already carries that count
+        // clears it.  M2 keeps opening the DRUM pattern page - F2 is the
+        // only new owner of this key here
+        if (stepEditOn && stepEditTarget == 8) {
+          stepEditSet(true, 0);            // back to editing the steps
+          headerShow("Step Edit on");
+          if (logRoom(48)) Serial.println("  edit target steps");
+        } else {
+          stepEditSet(true, 8);
+          char hb[24];
+          snprintf(hb, sizeof(hb), "Ratchet %u", stepRatArmSel());
+          headerShow(hb);
+          if (logRoom(80)) {
+            Serial.print("  edit target ratchet ");
+            Serial.println(stepRatArmSel());
           }
         }
       }
@@ -2225,7 +2255,7 @@ void encCcIncoming(uint8_t ch, uint8_t cc, uint8_t val) {
 // block at 160 (Keyboard.cpp) when the CC set went from 8/20 CCs to 36 - the
 // two overlapped by 419 bytes, so every save of one invalidated the other
 // and nothing survived no matter how often you pressed REC.  The CC block
-// now sits after the SEQ block: 160 + 1380 = 1539, so 1600..2178 is free.
+// now sits after the SEQ block: 160 + 1398 = 1558, so 1600..2178 is free.
 static const uint8_t CC_EE_MAGIC = 0xCE;
 static const uint16_t CC_EE_ADDR = 1600;
 static const uint16_t CC_EE_LEN = 579;
@@ -2235,7 +2265,7 @@ static const uint16_t CC_EE_LEN = 579;
 // only reaches flash on commit().  The Teensy 4.1 writes its emulated EEPROM
 // on every put() and has neither call, hence the guards.  Both are called for
 // the SEQ block too (Keyboard.cpp), so the whole layout is opened once here.
-#define CFG_EE_BYTES 2200   // 160 pad + 1380 SEQ + 579 CC = 2119, rounded
+#define CFG_EE_BYTES 2200   // 160 pad + 1398 SEQ + 579 CC = 2137, rounded
 
 void cfgStoreBegin() {
 #ifdef use_SC01Plus
@@ -3334,13 +3364,16 @@ void handleEncoderEvents() {
             headerShow(sb);
             if (logRoom(48)) { Serial.print("  "); Serial.println(sb); }
           }
-        // F3 held: ENC6 = ACCENT velocity of the edit track (every track
-        // type).  Otherwise the step-edit value encoders: ENC5 = gate %,
-        // ENC6 = default velocity (MONO only), ENC7 = the FX type or the
-        // armed step TYPE while those targets are engaged (POLY),
+        // ACCENT velocity of the edit track (ENC7, every track type).  The
+        // M2 pages that own ENC7 were dispatched above, and the POLY
+        // step-edit FX / TYPE arms take it through seqAccentEncCtx() below.
+        // Otherwise the step-edit value encoders: ENC5 = gate %,
+        // ENC6 = default velocity (MONO only) or the armed ratchet count
+        // (DRUM, target 8), ENC7 = the FX type or the armed step TYPE while
+        // those targets are engaged (POLY),
         // ENC8 = the probability of the edit track itself - live, so every
         // PROB step of that track re-rolls at the new rate
-        } else if (ei == 5 && ed != 0 && f3AccentActive()) {
+        } else if (ei == 6 && ed != 0 && seqAccentEncCtx()) {
           seqAccentVelocityAdjust(ed);
           headerAnnounceInt("Accent Velocity", seqAccentVelocity());
           if (logRoom(48)) {
@@ -3424,6 +3457,18 @@ void handleEncoderEvents() {
               Serial.print("  type arm ");
               Serial.println(stepTypeArmName());
             }
+          } else if (ei == 5 && stepEditTarget == 8 &&
+                     seqTrack() == SEQ_TRACK_DRUM && stepEditAccCtx()) {
+            // armed ratchet count of the DRUM pads: 2 / 3 / 4 repeats inside
+            // one step (4 counts = 1 step, clamped, no wrap)
+            stepRatArmAdjust(ed);
+            char hb[24];
+            snprintf(hb, sizeof(hb), "Ratchet %u", stepRatArmSel());
+            headerShow(hb);
+            if (logRoom(48)) {
+              Serial.print("  ratchet ");
+              Serial.println(stepRatArmSel());
+            }
           } else if (ei == 7 &&
                      (stepEditCtx() || stepEditAccCtx())) {
             seqProbAdjust(ed);
@@ -3447,27 +3492,40 @@ void handleEncoderEvents() {
         }
         any = true;
       } else if (ei == 2 && ed != 0) {
-        // SEQMODE3: ENC3 = FOLLOW, three-state (OFF / ON / FREEZE): OFF =
-        // own steps play the stored line, ON = notes re-resolve live from
-        // the feeder, FREEZE = hold the chord the feeder is playing at the
-        // moment you switch.  4 counts = 1 state, clamped at both ends like
-        // every other SEQMODE dial (no wrap - a turn past FREEZE used to
-        // drop straight back to OFF)
-        static int16_t folRes = 0;
-        folRes += ed;
-        int8_t st = 0;
-        while (folRes >= 4) { folRes -= 4; st++; }
-        while (folRes <= -4) { folRes += 4; st--; }
-        if (st) {
-          static const char *folN[3] = { "Off", "On", "Freeze" };
-          int m = (int)seqFollowMode() + st;
-          if (m < 0) m = 0;
-          if (m > 2) m = 2;
-          if ((uint8_t)m != seqFollowMode()) seqFollowModeSet((uint8_t)m);
-          headerAnnounce("Follow", folN[m]);
+        if (modeVariant == 3 && seqTrack() == SEQ_TRACK_DRUM) {
+          // SEQMODE3 PAD on a DRUM track (the FOLLOW knob has no follower
+          // job there): LIVE = a keyboard press picks the voice AND sounds
+          // it, SELECT = picks it silently.  Two-state, 4 counts = 1 state,
+          // clamped like every other SEQMODE3 dial (no wrap)
+          seqPadModeAdjust(ed);
+          headerAnnounce("Pad", seqPadModeName(seqPadMode()));
           if (logRoom(48)) {
-            Serial.print("  follow ");
-            Serial.println(folN[m]);
+            Serial.print("  pad ");
+            Serial.println(seqPadModeName(seqPadMode()));
+          }
+        } else {
+          // SEQMODE3: ENC3 = FOLLOW, three-state (OFF / ON / FREEZE): OFF =
+          // own steps play the stored line, ON = notes re-resolve live from
+          // the feeder, FREEZE = hold the chord the feeder is playing at the
+          // moment you switch.  4 counts = 1 state, clamped at both ends like
+          // every other SEQMODE dial (no wrap - a turn past FREEZE used to
+          // drop straight back to OFF)
+          static int16_t folRes = 0;
+          folRes += ed;
+          int8_t st = 0;
+          while (folRes >= 4) { folRes -= 4; st++; }
+          while (folRes <= -4) { folRes += 4; st--; }
+          if (st) {
+            static const char *folN[3] = { "Off", "On", "Freeze" };
+            int m = (int)seqFollowMode() + st;
+            if (m < 0) m = 0;
+            if (m > 2) m = 2;
+            if ((uint8_t)m != seqFollowMode()) seqFollowModeSet((uint8_t)m);
+            headerAnnounce("Follow", folN[m]);
+            if (logRoom(48)) {
+              Serial.print("  follow ");
+              Serial.println(folN[m]);
+            }
           }
         }
         any = true;

@@ -212,6 +212,7 @@ static void writeLegends() {
     const uint8_t sel = stepEditSel();
     if (polyRadio && sel == 5) wantF = 1;
     else if (polyRadio && sel == 6) wantF = 2;
+    else if (sel == 8) wantF = 2;        // DRUM RATCHET rides F2
     else if (sel >= 1 && sel <= 4) wantF = sel;
   }
   for (uint8_t c = 0; c < 4; c++)
@@ -359,6 +360,13 @@ void refreshMainScreen() {
   // SEQMODE + DRUM/POLY + radio on: only ENC8 (track probability) is bound
   bool seqDrumGe = (modeBase == MODE_SEQ && modeVariant != 3 &&
                     seqTrack() != SEQ_TRACK_MONO && stepEditIsOn());
+  // ENC7 = ACCENT velocity (all track types) in SEQMODE: the label/value
+  // below only apply while nothing else owns that slot - the M2 pages
+  // binding ENC7 (ARP INSERT, GNR8 TIE, LEAD DENS, SKANK TES%), the DRUM
+  // page (lane lines) and any SEQ overlay (their rows win later in the
+  // chain anyway); the POLY step-edit exclusion lives in seqAccentEncCtx
+  bool acc7 = seqAccentEncCtx() && !arpP && !genP && !leadP && !skankP &&
+              !drumP && !seqOv;
   // KEYMODE2 rows: the main chord row, or the PREV overlay row
   bool key2 = (modeBase == MODE_KEY && modeVariant == 2 && b.enc != ENC_KEY2_PREV);
   bool keyOv = (b.enc == ENC_KEY2_PREV);
@@ -430,6 +438,9 @@ void refreshMainScreen() {
         seqTrack() == SEQ_TRACK_DRUM && c >= 1 && c <= 3 &&
         !seqOv && !drumP)
       l1 = "--";
+    // SEQMODE3 on a DRUM track: ENC3 carries PAD instead of FOLLOW (a drum
+    // track never follows), same slot, new job
+    if (seq3 && seqTrack() == SEQ_TRACK_DRUM && c == 2) l1 = "PAD";
     scrCellLabel(c, l1);
     if (genOv) {
       // SHIFT/TRANS row: ENC1 = the rotation position, ENC2 = the track's
@@ -620,8 +631,13 @@ void refreshMainScreen() {
     } else if (seq3 && c == 1) {
       snprintf(val, sizeof(val), "%d", seqPatLen());      // ENC2 = steps
     } else if (seq3 && c == 2) {
-      static const char *folN[3] = { "OFF", "ON", "FREEZE" };
-      snprintf(val, sizeof(val), "%s", folN[seqFollowMode()]);
+      if (seqTrack() == SEQ_TRACK_DRUM) {
+        snprintf(val, sizeof(val), "%s",   // DRUM: PAD = LIVE / SELECT
+                 seqPadModeName(seqPadMode()));
+      } else {
+        static const char *folN[3] = { "OFF", "ON", "FREEZE" };
+        snprintf(val, sizeof(val), "%s", folN[seqFollowMode()]);
+      }
     } else if (seq3 && c == 3) {
       snprintf(val, sizeof(val), "%s",
                seqSpeedName(seqSpeedIdxOf((uint8_t)(seqEditChannel() - 1))));
@@ -730,7 +746,7 @@ void refreshMainScreen() {
       snprintf(ccL2, sizeof(ccL2), "CC%u", encCcNum(4 + c));
       l2 = ccL2;
     }
-    if (c == 1 && f3AccentActive()) l2 = "ACC";   // F3 held: ENC6 = accent
+    if (c == 2 && acc7) l2 = "ACC";         // ENC7 = accent velocity (all tracks)
     if (!drumP && modeBase == MODE_SEQ && modeVariant == 3 &&
         seqTrack() == SEQ_TRACK_DRUM && 4 + c == 6)
       l2 = "MAP";           // DRUM track, SEQMODE3 only: the kit mapping sits
@@ -753,6 +769,8 @@ void refreshMainScreen() {
       l2 = "TYPE";                                // POLY edit: ENC7 = TYPE arm
     if (seqDrumGe && 4 + c <= 5 && stepEditSel() == 7)
       l2 = (c == 0) ? "SUB" : (c == 1) ? "INV" : (c == 2) ? "PAS" : "COL"; // POLY edit: ENC5-8 = EMB params
+    if (seqDrumGe && 4 + c == 5 && stepEditSel() == 8)
+      l2 = "RATCH";                              // DRUM edit: ENC6 = ratchet count
     if (gSub != 0xFF) l2 = "---";            // option sub-page: row 2 idle
     if (skankStepOv) {          // lock row: EXT/SUB, TES% lock, TRANS (wins
       static const char *s2[4] = { "EXT", "SUB", "TES%", "TRANS" }; // over radio)
@@ -796,8 +814,8 @@ void refreshMainScreen() {
       } else snprintf(val, sizeof(val), "");
     } else if (gSub != 0xFF) {
       snprintf(val, sizeof(val), "");        // option sub-page: idle
-    } else if (c == 1 && f3AccentActive()) {
-      snprintf(val, sizeof(val), "%d", seqAccentVelocity()); // ENC6 = acc vel
+    } else if (acc7 && 4 + c == 6) {
+      snprintf(val, sizeof(val), "%d", seqAccentVelocity()); // ENC7 = acc vel
     } else if (arpP && arpSlotAt(arpOptionSel(), (uint8_t)(4 + c)) >= 0) {
       uint8_t slot = (uint8_t)arpSlotAt(arpOptionSel(), (uint8_t)(4 + c));
       snprintf(val, sizeof(val), "%s",
@@ -849,7 +867,9 @@ void refreshMainScreen() {
     } else if (seqDrumGe && 4 + c == 4) {
       snprintf(val, sizeof(val), "");                    // ENC5 free
     } else if (seqDrumGe && 4 + c == 5) {
-      snprintf(val, sizeof(val), "");                    // ENC6 free
+      if (stepEditSel() == 8)
+        snprintf(val, sizeof(val), "%u", stepRatArmSel());  // ENC6 = ratchet
+      else snprintf(val, sizeof(val), "");       // ENC6 free
     } else if (seqDrumGe && 4 + c == 6) {
       if (stepEditSel() == 7) {
         // EMB target: show SUB/INV/PAS/COL for focused step
@@ -935,6 +955,7 @@ void drawHeaderText() {
     if (stepEditSel() == 5) left = "STEP FX";
     else if (stepEditSel() == 6) left = "STEP TYPE";
     else if (stepEditSel() == 7) left = "EMBED";
+    else if (stepEditSel() == 8) left = "RATCHET";
     else left = ed[stepEditSel() - 1];
   }
   // A transient message owns the whole strip; the persistent one (the KEY4

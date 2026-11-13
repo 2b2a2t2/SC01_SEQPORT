@@ -286,6 +286,12 @@ bool stepAttrToggle(uint8_t step, uint8_t att);
                                       // from the track's own probability)
 uint8_t stepAttrs(uint8_t step);      // edit channel's attribute mask for the
                                       // LED pulse - DRUM follows the part select
+// DRUM ratchet (SEQMODE F2 target): per-VOICE re-trigger count of a step,
+// 0 = single hit else 2/3/4 - only the SELECTED PART a tap stamps rolls, the
+// other voices of that step play straight.  The armed value lives in Events
+// (ENC6); a tap stamps it on the selected part (stepRatchetStamp) or clears
+// that part when it already carries the armed count
+bool    stepRatchetStamp(uint8_t step, uint8_t v); // true = stamped (not cleared)
 bool stepTypeToggle(uint8_t step, uint8_t type);
                                       // stamp / clear the bits6-7 override
                                       // (type 0..2 = STEP/STRUM/HAND): true =
@@ -378,6 +384,8 @@ void seqStrumPoll();                  // drain staggered strum note-ons
                                       // (loop context, beside seqGatePoll)
 void compPoll();                      // drain COMP stab queue (loop context,
                                       // beside seqStrumPoll)
+void seqRatchetPoll();                // drain DRUM ratchet re-triggers (loop
+                                      // context, beside compPoll)
 void seqCompHitsAdjust(int16_t counts); // COMP page ENC1: 4 counts = 1 stab
 int  seqCompHits();                   // edit track's comp stabs (0..8)
 uint8_t seqCompHitsOf(uint8_t i);     // raw per-track (EEPROM save)

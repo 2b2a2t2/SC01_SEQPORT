@@ -17,7 +17,8 @@
    old pattern), **`F#`** copy the track, **`A#`** paste it here, **`G#`** bar follow (the
    window chases the playhead).
 5. Switch track with `SEQUENCER 3 → ENC6`, paste, and keep going.
-6. To give the keyboard back: select the keyboard's own track on `KEYBOARD 3`.
+6. To give the keyboard back: tap the `KEYBOARD` mode button (the latch drops at once), or
+   select the keyboard's own track on `KEYBOARD 3`.
 
 ## What you should hear
 

@@ -27,15 +27,19 @@ alive under its page or radio).
 
 | Set | ENC1 | ENC2 | ENC3 | ENC4 | ENC5 | ENC6 | ENC7 | ENC8 |
 |---|---|---|---|---|---|---|---|---|
-| **SEQ 1** | OCT | LISTEN | PLAY | OVERDUB | GATE | VEL | -- | PROB |
-| **SEQ 2** | OCT | LISTEN | PLAY | OVERDUB | GATE | VEL | -- | PROB |
+| **SEQ 1** | OCT | LISTEN | PLAY | OVERDUB | GATE | VEL | ACC | PROB |
+| **SEQ 2** | OCT | LISTEN | PLAY | OVERDUB | GATE | VEL | ACC | PROB |
 | **SEQ 3** | OCT | LEN | FOLLOW | SPEED | INCH | TRACK | TYPE | BPM |
-| **SEQ 4** | SWING | AMT | EXT IN | SRC | GATE | VEL | -- | PROB |
+| **SEQ 4** | SWING | AMT | EXT IN | SRC | GATE | VEL | ACC | PROB |
 | **ENC 1–4** | CC17 | CC18 | CC19 | CC20 | CC1… | CC2… | CC3… | CC4… |
 | **KEY 1** | OCT | SCALE | KEY | -- | -- | -- | -- | -- |
 | **KEY 2** | OCT | SCALE | KEY | FSCALE | BASS | SPRD | DENS | LATCH |
 | **KEY 3** | OCT | SCALE | ENCOD | KBOARD | -- | -- | -- | -- |
 | **KEY 4** | GENRE | MOOD | TENS | MOTION | CAD | CPX | PHRASE | SURP |
+
+`ENC3` in **SEQ 3** reads `PAD` (`LIVE` / `SELECT`) on a DRUM track instead of `FOLLOW`,
+and `ENC6` reads `RATCH` (`2` / `3` / `4`) while the DRUM ratchet target is armed — a tap
+stamps that count on the step's **selected drum part**; only that part re-triggers.
 
 `ENC 5–8` in ENCMODE print the live CC number of the armed bank: `CC1–CC4` in page group 1,
 `CC21–CC24` in group 2.
@@ -65,7 +69,7 @@ alive under its page or radio).
 | Hold a step | Arm a span start (TIE chain on a bass track) or open the held-step row |
 | Tap an **F** | Arm that sub-page; the whole encoder row becomes its knobs |
 | Tap the armed F again | Release, back to the plain row |
-| Tap **M1** | Step-edit radio (targets TIE / GLIDE / ACCENT / PROB, and lets ENC2–4 turn `LISTEN` / `PLAY` / `OVERDUB`) |
+| Tap **M1** | Step-edit radio (targets TIE / GLIDE / ACCENT / PROB — DRUM adds RATCHET on **F2**, POLY adds FX / TYPE — and lets ENC2–4 turn `LISTEN` / `PLAY` / `OVERDUB`) |
 | Tap **M2** | The track-type page (GNR8, LEAD, ARP, COMP, HARM, SKANK, DRUM styles, strum ADDS) |
 | Hold **M2** | Overdub-layer panel on the keyboard row: C D E F = layers 1–4, C# = mute (always armed) / D# = erase (white key confirms), F# / G# / A# = undo / redo / reset layers |
 | Tap **M3** | Generate (page open) / re-roll (drum page) / page group (ENCMODE) |

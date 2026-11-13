@@ -14,7 +14,7 @@
 //                            MIDI clock) - the same switch as SEQMODE3 ENC4
 //
 // The two brightness values are stored in EEPROM above both save blocks
-// (SEQ at 160..1539, ENC CC at 1600..2178) and survive a power cycle; the
+// (SEQ at 160..1557, ENC CC at 1600..2178) and survive a power cycle; the
 // clock source stays RAM like the SEQMODE3 knob it mirrors.
 
 bool settingsOpen();

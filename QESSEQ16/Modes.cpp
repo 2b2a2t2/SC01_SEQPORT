@@ -636,7 +636,8 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
        (led == groupControls[2] ||
         (seqPolyRadio && led >= groupControls[5] &&
                         led <= groupControls[8]) ||
-        (!seqPolyRadio && (led == groupControls[5] + 2 ||
+        (!seqPolyRadio && (led == groupControls[5] + 1 ||
+                           led == groupControls[5] + 2 ||
                            led == groupControls[5] + 3))))) {
     if (isTouched) return CRGB::White;
     // strum ADDS row open: F1..F3 burn the STRUM/HAND hue when their color
@@ -686,7 +687,8 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
       return g;
     }
     // which F pad carries the selected target (MONO: F1-F4 = targets 1-4;
-    // DRUM: F3/F4 = 3/4; POLY: F1 = FX (5), F2 = TYPE (6), F3/F4 = 3/4).
+    // DRUM: F2 = RATCHET (8), F3/F4 = 3/4; POLY: F1 = FX (5), F2 = TYPE (6),
+    // F3/F4 = 3/4).
     // M1 is white only while it owns the radio: with the M2 ARP/GNR8 page
     // open the keys are one radio, so M1 dims like every unselected member
     uint8_t sel = stepEditSel();
@@ -694,6 +696,7 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
     if (sel != 0) {
       if (seqPolyRadio && sel == 5) wantF = 1;
       else if (seqPolyRadio && sel == 6) wantF = 2;
+      else if (sel == 8) wantF = 2;       // DRUM RATCHET lives on F2
       else wantF = sel;
     }
     bool pageOwns = arpPageActive() || genPageActive() || leadPageActive() ||
@@ -1214,6 +1217,16 @@ void modeOnEvent(uint8_t pad, uint8_t ev) {
   }
   if (b == MODE_NONE) return;
 
+  // Touching the KEY button hands the keyboard row back to the keys right
+  // away: a committed SEQ3 bar / verb latch (seq3KbCh) dies with the touch,
+  // so the row shows the keyboard again instead of staying on the copy /
+  // paste overlay until KEYMODE3 happens to pick a channel.  SEQ3 held is
+  // unaffected (seq3KbRole() stays true through the variant-3 hold itself)
+  if (b == MODE_KEY && seq3KbCh != 0) {
+    seq3KbRelease();
+    refreshAllLeds();      // the bar / verb row must repaint as keys
+  }
+
   // was the keyboard sitting in KEYMODE4 when this click/hold began?  The
   // variant mutations below must not be able to lose that fact
   bool wasK4 = (modeBase == MODE_KEY && modeVariant == 4);
@@ -1313,7 +1326,6 @@ void modeOnEvent(uint8_t pad, uint8_t ev) {
   encMuteHold(false);       // the M2 mute overlay never outlives the ENC mode
   drumMuteHold(false);      // nor the M1 drum-voice mute overlay
   arpPageDismiss();         // nor the M2 arp encoder page
-  f3AccentHold(false);      // nor the F3 accent-velocity rebind of ENC6
   strumFRowDismiss();       // nor the M2 strum ADDS row
   genPageDismiss();         // nor the M2 GNR8 encoder page
   k4TonalityDismiss();      // nor the KEYMODE4 tonality menu

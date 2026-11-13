@@ -155,6 +155,13 @@ static uint16_t stepStrumDt[SEQ_CH_COUNT][STEP_MAX][CHORD_MAX];
 // PERC lanes sit above bit 7, so a byte could never accent or gate them)
 static uint16_t drumAccent[SEQ_CH_COUNT][STEP_MAX];
 static uint16_t drumProbOn[SEQ_CH_COUNT][STEP_MAX];
+// DRUM ratchet (SEQMODE, F2 target + ENC6): how many times a step's VOICE
+// re-triggers inside that one step - 0 = single hit, else 2/3/4.  One count
+// per voice (notes 36..51, nibble-packed:4 bits per voice, even voice in the
+// high nibble), so a stamped hat rolls while the kick and snare beside it
+// play straight.  RAM only like every step field: stepAttClear wipes it,
+// SHIFT / paste / undo / double carry it
+static uint8_t stepRatchet[SEQ_CH_COUNT][STEP_MAX][8];
 // GNR8 per-step pitch modifiers (F2/F3/F4 pages on the BASS track):
 // octave transposition -2..+2, borrowed chord tone (0 = off, n = n-th
 // tone of the incoming chord, ascending) and the probability % that the
@@ -290,15 +297,16 @@ static uint8_t layPassPick(uint8_t ch) {
 }
 
 // a step's attributes live and die with its content (both the MONO flags
-// and the DRUM per-voice accent/probability masks; the POLY FX byte, the
-// HAND strum onsets, the GNR8 oct/borrow/prob modifiers and the layer tags
-// too - an empty step never carries a stale layer)
+// and the DRUM per-voice accent/probability masks and ratchet counts; the
+// POLY FX byte, the HAND strum onsets, the GNR8 oct/borrow/prob modifiers
+// and the layer tags too - an empty step never carries a stale layer)
 static void stepAttClear(uint8_t ch, uint8_t st) {
   stepAtt[ch][st] = 0;
   stepFx[ch][st] = 0;
   for (uint8_t i = 0; i < 4; i++) stepEmb[ch][st][i] = 255;  // 255 = use global
   drumAccent[ch][st] = 0;
   drumProbOn[ch][st] = 0;
+  memset(stepRatchet[ch][st], 0, sizeof(stepRatchet[ch][st]));
   stepOctM[ch][st] = 0;          // GNR8 mods: no octave shift, no borrow,
   stepBrwM[ch][st] = 0;          // modifier always passes (prob 100)
   stepModP[ch][st] = 100;
@@ -1195,9 +1203,14 @@ int keyPadPress(uint8_t idx) {
   // part 16), so the voice under the finger is the one the steps toggle
   if (drum && keyNote[idx] >= 36 && keyNote[idx] <= 51)
     drumPartSet((uint8_t)(keyNote[idx] - 36));
+  // PAD = SELECT (SEQMODE3 ENC3, per track): the press only moves the voice
+  // cursor above - no note leaves the port and keySounding stays false, so
+  // the release stays silent too.  LIVE (boot default) keeps the old
+  // behavior: select + sound
+  bool padSelect = drum && seqPadSelectOf((uint8_t)(keyCh - 1));
   // MONO track engaged: no raw note - the root/bass voice or the playhead
   // arp sounds instead (updatePending below re-voices it)
-  if (!monoEng) {
+  if (!monoEng && !padSelect) {
     usbMIDI.sendNoteOn(keyNote[idx], KEY_VEL, keyCh);
     keySounding[idx] = true;
   }
@@ -1536,6 +1549,7 @@ void stepShiftPattern(uint8_t n, int8_t dir) {
     stepRotRow(stepStrumDt[ch], CHORD_MAX * 2, n, d);
     stepRotRow(drumAccent[ch], sizeof(uint16_t), n, d);
     stepRotRow(drumProbOn[ch], sizeof(uint16_t), n, d);
+    stepRotRow(stepRatchet[ch], 8, n, d);  // the ratchet rides its step
     stepRotRow(stepOctM[ch], 1, n, d);
     stepRotRow(stepBrwM[ch], 1, n, d);
     stepRotRow(stepModP[ch], 1, n, d);
@@ -1775,7 +1789,7 @@ bool stepVoiAdjust(uint8_t step, int8_t d) {
 // one-level undo of the last KEYMODE4 write batch (apply / key write /
 // variation): a full snapshot of the edit sequence - chords, lengths, the
 // step attributes (incl. the TYPE override), the per-note HAND strum
-// onsets and the drum accent/probability masks (~1.8 KB static)
+// onsets and the drum accent/probability/ratchet tables (~3.8 KB static)
 static uint8_t snapChord[STEP_MAX][CHORD_MAX];
 static uint8_t snapLen[STEP_MAX];
 static uint8_t snapAttB[STEP_MAX];
@@ -1791,6 +1805,7 @@ static uint8_t snapModP[STEP_MAX];
 static int8_t  snapTrB[STEP_MAX];       // per-step TRANS
 static uint8_t snapSkankB[STEP_MAX][7]; // SKANK locks (a paste must undo
                                         // losslessly, like generate)
+static uint8_t snapRatB[STEP_MAX][8]; // DRUM per-voice ratchet counts
 static uint8_t snapPatLenB = 16;      // a paste carries length + speed, so
 static uint8_t snapSpdIdxB = 6;       // the undo slot has to hold them too
 static uint8_t snapCh = 0;
@@ -1809,6 +1824,7 @@ void stepSnapshotTake() {
     for (uint8_t i = 0; i < 4; i++) snapEmbB[st][i] = stepEmb[ch][st][i];
     snapDrumA[st] = drumAccent[ch][st];
     snapDrumP[st] = drumProbOn[ch][st];
+    memcpy(snapRatB[st], stepRatchet[ch][st], sizeof(snapRatB[st]));
     snapOctB[st] = stepOctM[ch][st];
     snapBrwB[st] = stepBrwM[ch][st];
     snapModP[st] = stepModP[ch][st];
@@ -1839,6 +1855,7 @@ int stepSnapshotRestore() {
     for (uint8_t i = 0; i < 4; i++) stepEmb[ch][st][i] = snapEmbB[st][i];
     drumAccent[ch][st] = snapDrumA[st];
     drumProbOn[ch][st] = snapDrumP[st];
+    memcpy(stepRatchet[ch][st], snapRatB[st], sizeof(stepRatchet[ch][st]));
     stepOctM[ch][st] = snapOctB[st];
     stepBrwM[ch][st] = snapBrwB[st];
     stepModP[ch][st] = snapModP[st];
@@ -1909,6 +1926,52 @@ bool stepTypeToggle(uint8_t step, uint8_t type) {
   }
   *a |= (uint8_t)((type + 1) << 6);
   return true;
+}
+
+// --- DRUM ratchet per-voice counts -----------------------------------------
+// One nibble per voice of a step (voice 0..15 = note 36..51, even voice in
+// the high nibble): 0 = single hit, 2/3/4 = repeats inside the step.  The
+// set path clamps outside 2..4 to 0, so a corrupt nibble can never ask for
+// a million repeats
+static uint8_t ratCountGet(const uint8_t *row, uint8_t vi) {
+  if (vi > 15) return 0;
+  uint8_t n = (vi & 1) ? (uint8_t)(row[vi >> 1] & 0x0F)
+                       : (uint8_t)(row[vi >> 1] >> 4);
+  return (n >= 2 && n <= 4) ? n : 0;
+}
+
+static void ratCountSet(uint8_t *row, uint8_t vi, uint8_t v) {
+  if (vi > 15) return;
+  if (v < 2 || v > 4) v = 0;
+  uint8_t i = (uint8_t)(vi >> 1);
+  if (vi & 1) row[i] = (uint8_t)((row[i] & 0xF0) | v);
+  else        row[i] = (uint8_t)((row[i] & 0x0F) | (uint8_t)(v << 4));
+}
+
+// does ANY voice of this step roll?  (step LED pulse, F2 blink)
+static bool ratAny(const uint8_t *row) {
+  for (uint8_t i = 0; i < 8; i++) if (row[i]) return true;
+  return false;
+}
+
+// F2-armed tap: stamp the ENC6 arm (2/3/4) onto the SELECTED drum part of
+// the step - every voice keeps its own count, so a stamped hat rolls while
+// the kick and snare beside it play straight.  Tapping a part that already
+// carries the armed count clears it (arming 3 and tapping a 2-part rewrites
+// it to 3).  True = stamped
+bool stepRatchetStamp(uint8_t step, uint8_t v) {
+  if (step >= STEP_MAX) return false;
+  if (v < 2 || v > 4) v = 0;
+  uint8_t part = drumPart;
+  if (part < 36 || part >= 52) return false;    // no part selected
+  uint8_t vi = (uint8_t)(part - 36);
+  uint8_t *row = stepRatchet[seqEditCh][step];
+  if (ratCountGet(row, vi) == v) {  // the same arm toggles this part off
+    ratCountSet(row, vi, 0);
+    return false;
+  }
+  ratCountSet(row, vi, v);
+  return v != 0;
 }
 
 // per-step embellishment overrides for KEYMODE4 (PREV hold encoders EN5-8)
@@ -2000,6 +2063,9 @@ uint8_t stepAttrs(uint8_t step) {
     uint8_t m = 0;
     if (drumAccent[seqEditCh][step] & bit) m |= SEQ_ATT_ACCENT;
     if (drumProbOn[seqEditCh][step] & bit) m |= SEQ_ATT_PROB;
+    // RATCHET (target 8) pulses from bit 1 << (8 - 1) = 0x80 when the
+    // SELECTED part rolls on this step - per voice, like accent/prob
+    if (ratCountGet(stepRatchet[seqEditCh][step], (uint8_t)(v - 36))) m |= 0x80;
     return m;
   }
   // bits 4-5 are never stored as attributes (4 = the record pass's OVERDUB
@@ -2754,6 +2820,73 @@ void compPoll() {
   }
 }
 
+// --- DRUM ratchet queue -----------------------------------------------------
+// Per-VOICE repeats (SEQMODE F2 RATCHET target): every voice's first hit
+// goes out inline with the step, then this queue re-fires each STAMPED voice
+// on its own schedule - `left[i]` more times inside that one step, `every[i]`
+// ms apart (the step's own ms / that voice's count), so a hat rolled 2 and a
+// snare rolled 4 share a step but not a grid.  The last repeat stays in
+// seqNotes so the step-boundary release cuts it - and releaseCh cancels the
+// queue itself, so a rest / length change / transport stop kills the tail
+// exactly like the COMP stabs do
+static struct RatQ {
+  uint8_t  note[CHORD_MAX];
+  uint8_t  vel[CHORD_MAX];
+  uint8_t  left[CHORD_MAX];    // repeats still owed, per queued voice
+  uint32_t at[CHORD_MAX];      // absolute onset (millis) of its next repeat
+  uint32_t every[CHORD_MAX];   // spacing between its repeats (ms)
+  uint8_t  nn;                 // voices queued to repeat
+  bool     on;
+} ratQ[SEQ_CH_COUNT];
+
+static void ratCancel(uint8_t c) { ratQ[c].on = false; }
+
+// stage one step's repeats: the n voices already sent inline, cnt[i] = the
+// count that voice was stamped with (2..4; a voice without a ratchet is
+// never queued), sd = this channel's step duration (ms, speed-scaled),
+// now = the step tick
+static void ratArm(uint8_t c, const uint8_t *note, const uint8_t *vel,
+                   const uint8_t *cnt, uint8_t n, uint32_t sd, uint32_t now) {
+  if (n > CHORD_MAX) n = CHORD_MAX;
+  uint8_t k = 0;
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t rn = cnt[i];
+    if (rn < 2) continue;                 // this voice plays straight
+    uint32_t every = sd ? (sd / rn) : 0;
+    if (!every) every = 1;
+    ratQ[c].note[k] = note[i];
+    ratQ[c].vel[k] = vel[i];
+    ratQ[c].left[k] = (uint8_t)(rn - 1);  // hit 1 already sounded
+    ratQ[c].every[k] = every;
+    ratQ[c].at[k] = now + every;
+    k++;
+  }
+  if (!k) { ratQ[c].on = false; return; }
+  ratQ[c].nn = k;
+  ratQ[c].on = true;
+}
+
+// drain the due repeats (called from the loop, next to compPoll): cut a
+// voice's sounding hit and restrike THAT voice alone - its neighbours keep
+// ringing on their own grid
+void seqRatchetPoll() {
+  uint32_t now = millis();
+  for (uint8_t c = 0; c < SEQ_CH_COUNT; c++) {
+    if (!ratQ[c].on) continue;
+    bool owed = false;
+    for (uint8_t i = 0; i < ratQ[c].nn; i++) {
+      if (!ratQ[c].left[i]) continue;
+      owed = true;
+      if ((int32_t)(now - ratQ[c].at[i]) < 0) continue;
+      seqOutOff(c, ratQ[c].note[i]);
+      seqOutOn(c, ratQ[c].note[i], ratQ[c].vel[i]);
+      ratQ[c].left[i]--;
+      ratQ[c].at[i] += ratQ[c].every[i];
+    }
+    if (!owed) ratQ[c].on = false;
+  }
+}
+
 // release one sequence's sounding notes and cancel its gate timer
 static void releaseCh(uint8_t c) {
   for (uint8_t i = 0; i < seqLen[c]; i++)
@@ -2762,6 +2895,7 @@ static void releaseCh(uint8_t c) {
   gateOffAt[c] = 0;
   strumCancel(c);
   compCancel(c);            // a rest / length change drops the stab tail
+  ratCancel(c);             // ...and the ratchet repeats with it
   handRing[c] = 0;
 }
 
@@ -3824,6 +3958,11 @@ static void seqAdvanceOnce(bool start, const bool *go,
       uint8_t snote[CHORD_MAX], svel[CHORD_MAX];
       uint16_t sdts[CHORD_MAX];
       uint8_t sn = 0;
+      // DRUM ratchet: every voice carries its OWN count, so the notes that
+      // go out inline are captured here for ratArm below - hit 1 already
+      // sounded, count-1 repeats follow on that voice's own grid
+      uint8_t rnote[CHORD_MAX], rvel[CHORD_MAX], rcnt[CHORD_MAX];
+      uint8_t ratN = 0;
       for (uint8_t i = 0; i < len && i < CHORD_MAX; i++) {
         uint8_t raw = ch[i];
         // DRUM voices muted in the ENCMODE overlay stay silent (match the
@@ -3848,6 +3987,10 @@ static void seqAdvanceOnce(bool start, const bool *go,
           }
           if ((drumAccent[c][stp] >> v) & 1) dvel = seqAccVel[c];
         }
+        // this voice's own ratchet (0 = it plays straight); only the parts
+        // the F2 stamp landed on roll, the rest of the step is untouched
+        uint8_t rn = (drumTrack && v != 0xFF)
+                       ? ratCountGet(stepRatchet[c][stp], v) : 0;
         uint8_t note = shNoteK(c, raw, sh, tr);
         if (doStrum) {                  // stage the rake (STRUM / HAND)
           if (sn < CHORD_MAX) {
@@ -3870,6 +4013,12 @@ static void seqAdvanceOnce(bool start, const bool *go,
           seqNotes[c][seqLen[c]] = note;
           seqOutOn(c, note, dvel);
           seqLen[c]++;
+          if (rn > 1 && ratN < CHORD_MAX) {   // remember it for the repeats
+            rnote[ratN] = note;
+            rvel[ratN] = dvel;
+            rcnt[ratN] = rn;
+            ratN++;
+          }
         }
       }
       if (doStrum && sn) {
@@ -3900,6 +4049,8 @@ static void seqAdvanceOnce(bool start, const bool *go,
         if (handStep) handRing[c] |= HAND_RING_GEST;   // rings until next content
       } else if (compOn && sn) {
         compEnqueue(c, snote, svel, sn, sd);   // stabs at the Euclid slots
+      } else if (ratN) {
+        ratArm(c, rnote, rvel, rcnt, ratN, sd, now);  // repeats in the step
       }
     }
   }
@@ -3925,6 +4076,9 @@ static void seqAdvanceOnce(bool start, const bool *go,
       if (stepChordLen[seqEditCh][fstp] > 0) {
         if (drumAccent[seqEditCh][fstp]) fBlinkMask |= SEQ_ATT_ACCENT;
         if (drumProbOn[seqEditCh][fstp]) fBlinkMask |= SEQ_ATT_PROB;
+        // ratchet rides F2 (bit 1), like the POLY TYPE override does - any
+        // voice of the step rolling lights it
+        if (ratAny(stepRatchet[seqEditCh][fstp])) fBlinkMask |= 0x02;
       }
     }
   }
@@ -4676,6 +4830,7 @@ struct LaySnap {
   uint8_t  emb[STEP_MAX][4];
   uint16_t drumA[STEP_MAX];
   uint16_t drumP[STEP_MAX];
+  uint8_t  rat[STEP_MAX][8];   // DRUM per-voice ratchet counts travel too
   int8_t   octM[STEP_MAX];
   uint8_t  brwM[STEP_MAX];
   uint8_t  modP[STEP_MAX];
@@ -4698,6 +4853,7 @@ static void laySnapFill(LaySnap *s, uint8_t ch) {
     for (uint8_t i = 0; i < 4; i++) s->emb[st][i] = stepEmb[ch][st][i];
     s->drumA[st] = drumAccent[ch][st];
     s->drumP[st] = drumProbOn[ch][st];
+    memcpy(s->rat[st], stepRatchet[ch][st], sizeof(s->rat[st]));
     s->octM[st] = stepOctM[ch][st];
     s->brwM[st] = stepBrwM[ch][st];
     s->modP[st] = stepModP[ch][st];
@@ -4723,6 +4879,7 @@ static void laySnapApply(const LaySnap *s) {
     for (uint8_t i = 0; i < 4; i++) stepEmb[ch][st][i] = s->emb[st][i];
     drumAccent[ch][st] = s->drumA[st];
     drumProbOn[ch][st] = s->drumP[st];
+    memcpy(stepRatchet[ch][st], s->rat[st], sizeof(stepRatchet[ch][st]));
     stepOctM[ch][st] = s->octM[st];
     stepBrwM[ch][st] = s->brwM[st];
     stepModP[ch][st] = s->modP[st];
@@ -4955,8 +5112,9 @@ void seqEraseAll() {
 // lengths, the attribute byte (incl. the POLY step-TYPE override), the FX
 // byte, the KEYMODE4 embellishment params, the per-step modifiers (OCT /
 // BRW / PROB / TRANS), the HAND strum onsets, the DRUM per-voice accent and
-// probability masks and the SKANK locks - i.e. exactly the fields
-// stepAttClear wipes, so a pasted pattern sounds like its source.  The
+// probability masks, the SKANK locks and the DRUM per-voice ratchet counts
+// - i.e. exactly the fields stepAttClear wipes, so a pasted pattern sounds
+// like its source.  The
 // destination keeps its own TRACK settings (length, FILL/MOT, genre, kit
 // map, TRANS, swing, channel): only the step data moves.  Patterns are RAM
 // only, so the clipboard is too - it dies with power like what it holds
@@ -4978,6 +5136,7 @@ static struct SeqPatClip {
   uint8_t  lay[STEP_MAX][CHORD_MAX];   // overdub layer tags travel too
   uint16_t drumA[STEP_MAX];
   uint16_t drumP[STEP_MAX];
+  uint8_t  rat[STEP_MAX][8];   // DRUM per-voice ratchet counts travel too
 } patClip;
 
 bool seqPatClipHas() { return patClip.valid; }
@@ -5008,6 +5167,7 @@ int seqPatCopy() {
     }
     patClip.drumA[st] = drumAccent[ch][st];
     patClip.drumP[st] = drumProbOn[ch][st];
+    memcpy(patClip.rat[st], stepRatchet[ch][st], sizeof(patClip.rat[st]));
     if (stepChordLen[ch][st]) active++;
   }
   patClip.valid = true;
@@ -5044,6 +5204,7 @@ int seqPatPaste() {
     }
     drumAccent[ch][st] = patClip.drumA[st];
     drumProbOn[ch][st] = patClip.drumP[st];
+    memcpy(stepRatchet[ch][st], patClip.rat[st], sizeof(stepRatchet[ch][st]));
     if (patClip.len[st]) active++;
   }
   seqPatLenApplyOf(ch, patClip.patLen);  // the length came with the steps
@@ -5090,6 +5251,8 @@ void seqPatRepeatInto(uint8_t ch, uint8_t oldLen) {
     }
     drumAccent[ch][dst] = drumAccent[ch][src];
     drumProbOn[ch][dst] = drumProbOn[ch][src];
+    memcpy(stepRatchet[ch][dst], stepRatchet[ch][src],
+           sizeof(stepRatchet[ch][dst]));
   }
   seqOctClamp(ch);              // copies may extend the shift range
   stepSyncFrom(ch);             // listeners / HARM tracks re-derive
@@ -5111,14 +5274,15 @@ void seqPatRepeatInto(uint8_t ch, uint8_t oldLen) {
 // arpParamsMark | swingStyle[16] | swingAmt[16] | swingMark |
 // extInMode[16] | extInSrc[16] | extInMark |
 // recListen[16] | recPlayback[16] | recOverdub[16] | recMark |
-// checksum = 1380 bytes; blank or
+// padMode[16] | padMark | checksum = 1398 bytes; blank or
 // corrupt keeps the defaults.  A block written by an older build
-// (1330/1296/1262/940/923/666/665/649/616/567/564/532/436/420/404/388/260 bytes) still
+// (1380/1330/1296/1262/940/923/666/665/649/616/567/564/532/436/420/404/388/260 bytes) still
 // loads: the core fields are at the same offsets and the newer params keep
 // their defaults - saved config survives the upgrade
 static const uint8_t  SEQ_EE_MAGIC = 0x53;
 static const uint16_t SEQ_EE_ADDR = 160;
-static const uint16_t SEQ_EE_LEN = 1380;      // + per-track record options
+static const uint16_t SEQ_EE_LEN = 1398;      // + per-track PAD mode
+static const uint16_t SEQ_EE_LEN_PAD = 1380;  // previous: per-track record options
 static const uint16_t SEQ_EE_LEN_RECO = 1330; // previous: per-track EXT IN
 static const uint16_t SEQ_EE_LEN_EXTIN = 1296; // previous: per-track swing
 static const uint16_t SEQ_EE_LEN_SWING = 1262; // previous: ARP F sub-page params
@@ -5138,6 +5302,7 @@ static const uint8_t  SEQ_ARP_MARK = 1;   // ARP sub-page params present (b[1260
 static const uint8_t  SEQ_SWING_MARK = 1; // per-track swing present (b[1294])
 static const uint8_t  SEQ_EXTIN_MARK = 1; // per-track EXT IN present (b[1328])
 static const uint8_t  SEQ_RECMARK = 1;    // record options present (b[1378])
+static const uint8_t  SEQ_PADMARK = 1;    // per-track PAD mode present (b[1396])
 static const uint16_t SEQ_EE_LEN_LEAD2 = 616; // previous: mode/page mem
 static const uint16_t SEQ_EE_LEN_MODE = 567;  // previous: link flags only
 static const uint16_t SEQ_EE_LEN_SKANK2 = 564; // previous: SKANK knobs[128]
@@ -5246,6 +5411,9 @@ void seqCfgSave() {
     b[1362 + i] = seqRecOverdubOf(i);            // OFF / ON
   }
   b[1378] = SEQ_RECMARK;               // record options present
+  for (uint8_t i = 0; i < SEQ_CH_COUNT; i++)    // per-track PAD mode
+    b[1380 + i] = seqPadModeOf(i) ? 1 : 0;       // LIVE = 0, SELECT = 1
+  b[1396] = SEQ_PADMARK;               // PAD mode present
   uint8_t sum = 0;
   for (uint16_t i = 0; i < SEQ_EE_LEN - 1; i++) sum += b[i];
   b[SEQ_EE_LEN - 1] = sum;
@@ -5257,10 +5425,10 @@ void seqCfgLoad() {
   uint8_t b[SEQ_EE_LEN];
   EEPROM.get(SEQ_EE_ADDR, b);
   // pick the NEWEST block length whose magic + checksum validate, so an
-  // older save (1330 = pre-record-options, 1296 = pre-EXT-IN, 1262 =
-  // pre-swing, 940 = pre-ARP, 923 = pre-kit-map, 666 = before the DRUM page,
-  // 665 = 7-rung speed ladder, ... down to 260 = legacy) still restores its
-  // fields and the newer ones keep their defaults
+  // older save (1380 = pre-PAD-mode, 1330 = pre-record-options, 1296 =
+  // pre-EXT-IN, 1262 = pre-swing, 940 = pre-ARP, 923 = pre-kit-map, 666 =
+  // before the DRUM page, 665 = 7-rung speed ladder, ... down to 260 =
+  // legacy) still restores its fields and the newer ones keep their defaults
   uint16_t len = 0;
   for (uint16_t L = SEQ_EE_LEN;;) {
     uint8_t sum = 0;
@@ -5271,11 +5439,12 @@ void seqCfgLoad() {
         (L < SEQ_EE_LEN ||
          (b[664] == SEQ_SPD_MARK && b[1260] == SEQ_ARP_MARK &&
           b[1294] == SEQ_SWING_MARK && b[1328] == SEQ_EXTIN_MARK &&
-          b[1378] == SEQ_RECMARK))) {
+          b[1378] == SEQ_RECMARK && b[1396] == SEQ_PADMARK))) {
       len = L;
       break;
     }
-    if (L == SEQ_EE_LEN) L = SEQ_EE_LEN_RECO;
+    if (L == SEQ_EE_LEN) L = SEQ_EE_LEN_PAD;
+    else if (L == SEQ_EE_LEN_PAD) L = SEQ_EE_LEN_RECO;
     else if (L == SEQ_EE_LEN_RECO) L = SEQ_EE_LEN_EXTIN;
     else if (L == SEQ_EE_LEN_EXTIN) L = SEQ_EE_LEN_SWING;
     else if (L == SEQ_EE_LEN_SWING) L = SEQ_EE_LEN_ARP;
@@ -5314,7 +5483,8 @@ void seqCfgLoad() {
   bool extA  = (len >= SEQ_EE_LEN_SWING); // ARP sub-page params (1262)
   bool extSw = (len >= SEQ_EE_LEN_EXTIN); // per-track swing (1296)
   bool extXi = (len >= SEQ_EE_LEN_RECO); // per-track EXT IN (1330)
-  bool extRc = (len >= SEQ_EE_LEN);     // record options (1380)
+  bool extRc = (len >= SEQ_EE_LEN_PAD);  // record options (1380)
+  bool extPad = (len >= SEQ_EE_LEN);     // PAD mode (1398)
   for (uint8_t i = 0; i < SEQ_CH_COUNT; i++) {
     int v = (int8_t)b[3 + i];            // octave: keep the cast signed
     if (v < -60) v = -60;
@@ -5383,6 +5553,10 @@ void seqCfgLoad() {
       seqRecPlaybackSet(i, b[1346 + i]); // (bad -> GATE)
       seqRecOverdubSet(i, b[1362 + i]);  // (bad -> OFF)
     }
+  }
+  if (extPad) {                          // per-track PAD mode (1398); older
+    for (uint8_t i = 0; i < SEQ_CH_COUNT; i++)
+      seqPadModeSetOf(i, b[1380 + i]);   // blocks keep LIVE (the default)
   }
   if (extG) {                            // GNR8 params (new-format block;
     for (uint8_t i = 0; i < SEQ_CH_COUNT; i++) {   // legacy blocks keep the

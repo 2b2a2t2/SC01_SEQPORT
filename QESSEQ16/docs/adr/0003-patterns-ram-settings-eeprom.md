@@ -23,7 +23,7 @@ attributes + masks is a lot of EEPROM to rewrite on every edit.
 - A power cycle is a clean slate for music and a restore for settings. That is the intended
   performance model, not a limitation to work around.
 - Settings need an explicit gesture; there is no autosave, so a crash loses settings too.
-- Every added field grows a block (the SEQ block has gone 260 → … → 1380 bytes) and must be
+- Every added field grows a block (the SEQ block has gone 260 → … → 1398 bytes) and must be
   appended, never inserted, or old saves misread.
 - `ENC 4 + REC` is the exception: an older block is ignored entirely rather than partially
   loaded, because a wrong CC map is worse than a default one.

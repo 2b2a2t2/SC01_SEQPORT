@@ -295,7 +295,7 @@ raise it if a list still feels twitchy, lower it if a sweep feels slow.
 
 `Events.cpp` writes the ENCMODE CC block at address 0 with `CC_EE_LEN = 579`
 (bytes 0..578) while `Keyboard.cpp` writes the SEQ block at `SEQ_EE_ADDR = 160`
-(bytes 160..1539) — the two overlap by 419 bytes. When the CC block was
+(bytes 160..1557) — the two overlap by 419 bytes. When the CC block was
 introduced it was 131 bytes (commit `abc6849`, 2026-09-30), which fitted
 below 160; commit `9311e0a` "more CCs" (2026-10-18) grew it to 579 without
 moving the SEQ block. Each save therefore invalidates the other block's
@@ -313,7 +313,7 @@ are fixed in the store rather than in the saves:
    `get()` silently does nothing, and a `put()` that never gets a `commit()`
    only edits that RAM copy. `cfgStoreBegin()` (Events.cpp, called once in
    `setupSc01()` before the two loaders) opens it — `CFG_EE_BYTES = 2200`, the
-   160-byte pad + the 1380-byte SEQ block + the 579-byte CC block — and
+   160-byte pad + the 1398-byte SEQ block + the 579-byte CC block — and
    `cfgStoreCommit()` ends both saves. Both are `#ifdef use_SC01Plus`: the
    Teensy 4.1 writes its emulated EEPROM on `put()` and has neither call.
 2. **The blocks overlapped** (the section above): the CC save wrote its magic

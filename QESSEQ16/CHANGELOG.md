@@ -6,6 +6,45 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### SEQMODE3: KEY button releases the committed keyboard row
+
+- **Touching the `KEYBOARD` mode button now immediately releases the SEQMODE3 bar/verb
+  copy/paste latch** (`seq3KbRelease()`), so the keyboard row shows the keys again instead of
+  staying on the overlay until a channel happens to be picked on KEYMODE3. LEDs refresh with
+  it. Previously the latch only let go by selecting the keyboard's own track on `KEYBOARD 3`.
+  Holding SEQ into SEQMODE3 itself is unaffected (the row is up for as long as the hold lasts).
+
+### SEQMODE3: `PAD` knob on DRUM tracks (ENC3)
+
+- **`ENC3` on a DRUM track in SEQMODE3 is now `PAD` instead of `FOLLOW`** — a drum has no
+  follower job, so the slot picks what a keyboard-row press does while the keyboard sits on
+  this track: **`LIVE`** (boot default = the original behavior: the press picks the drum voice
+  *and* sounds it) or **`SELECT`** (the press only moves the voice cursor — no note leaves the
+  port). Two-state, 4 counts = 1 state, clamped — no wrap; the header announces
+  `Pad LIVE` / `Pad SELECT`. Per track, saved with SEQMODE4+REC — see
+  [Compatibility](#compatibility) (the SEQ block grew 1380 → 1398 bytes; older saves load with
+  PAD = `LIVE`).
+
+### DRUM step RATCHET (F2) + accent on ENC7
+
+- **A DRUM track in SEQMODE gains a per-voice RATCHET attribute**: **F2** switches the step-edit
+  radio to the `RATCHET` target (F2 again hands the pads back to the steps; the header and the
+  control legend read `RATCHET`). **ENC6** picks the armed count **2 · 3 · 4** (4 counts = 1
+  step, clamped — no wrap); tapping an active step **stamps** that count onto the step's
+  **selected drum part**, tapping the same part again **clears** it (header `C1 Ratchet 3`,
+  then `C1 Ratchet off`). Every voice keeps its own count: only the stamped part re-triggers
+  (hit 1 lands with the step, repeats spaced `step ms / count`), the kick and snare beside it
+  play straight. RAM only like every step field — it rides SHIFT, copy/paste, the undo slot
+  and dies at power-off; steps where the selected part rolls get the yellow attribute pulse
+  and F2 blinks while the playhead reads one. M2 still opens the DRUM pattern page (F2 is the
+  only new owner of that key on DRUM).
+- **Accent velocity moved to `ENC7` (`ACC`) in SEQMODE 1/2/4, for every track type** — the old
+  F3-hold that borrowed ENC6 is retired (one knob, one job; ENC6 keeps `VEL`). ENC7 yields to
+  the POLY step-edit `FX`/`TYPE`/`EMB` targets while they are engaged and to the M2 pages that
+  bind it (**GNR8 `TIE`, ARP `INST`, LEAD `DENS`, SKANK `TES%`**), and the DRUM pattern page /
+  SEQ overlays keep their rows while open. Legend rows for SEQ 1/2/4 now read `ACC` instead of
+  `--`.
+
 ### SC01 panel type: Nasalization
 
 - **The 480x320 panel draws in Nasalization** — the OTF cannot be rendered by the panel, so it
@@ -289,6 +328,7 @@ block size tells you which build wrote it.
 | 1296 | per-track swing style and amount |
 | 1330 | per-track `EXT IN` and `SRC` |
 | 1380 | per-track live-record options (`LISTEN` / `PLAYBACK` / `OVERDUB`) |
+| 1398 | per-track PAD mode (SEQMODE3 `ENC3` on a DRUM track: `LIVE` / `SELECT`) |
 
 `ENC 4 + REC` is the exception: an older block is **ignored** and defaults stay, because a
 half-loaded CC map is worse than a clean one.

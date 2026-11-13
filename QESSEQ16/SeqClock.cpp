@@ -277,6 +277,7 @@ void pollSeqClock() {
   seqGatePoll();               // track gate note-offs (MONO step-edit)
   seqStrumPoll();              // staggered strum note-ons (FX / TYPE=STRUM)
   compPoll();                  // COMP stab re-strikes (POLY STEP, HITS 2..8)
+  seqRatchetPoll();            // DRUM ratchet repeats (F2 target, per voice)
 
   // redraw when the displayed position moved or the mode changed.  The
   // trigger must include the DOT's own source (edit track head): playStep
@@ -1009,6 +1010,39 @@ void seqFollowModeSetOf(uint8_t ch, uint8_t m) {
     seqFollowFreezeClear(ch);
   }
 }
+
+// SEQMODE3 PAD knob (ENC3) on a DRUM track: what a keyboard-row press does
+// while the keyboard channel sits on a drum track.  LIVE = pick the voice
+// AND sound it (the original behavior, boot default - an untouched device
+// plays exactly as before), SELECT = pick the voice silently (the press
+// only moves the drum cursor, no MIDI leaves the port).  Per track,
+// persisted in the SEQ EEPROM block; 0 = LIVE, 1 = SELECT, corrupt >1 =
+// LIVE on load
+static uint8_t padMode[16] = {0};
+
+uint8_t seqPadMode() { return padMode[seqEditChannel() - 1]; }
+uint8_t seqPadModeOf(uint8_t ch) { return ch < 16 ? padMode[ch] : 0; }
+bool seqPadSelectOf(uint8_t ch) { return ch < 16 && padMode[ch] != 0; }
+void seqPadModeSet(uint8_t m) {
+  padMode[seqEditChannel() - 1] = m ? 1 : 0;
+}
+void seqPadModeSetOf(uint8_t ch, uint8_t m) {
+  if (ch < 16) padMode[ch] = m ? 1 : 0;
+}
+// two-state, 4 counts = 1 state, clamped (no wrap) like every SEQMODE3 dial
+void seqPadModeAdjust(int16_t counts) {
+  static int16_t padRes = 0;
+  padRes += counts;
+  int16_t st = 0;
+  while (padRes >= 4) { padRes -= 4; st++; }
+  while (padRes <= -4) { padRes += 4; st--; }
+  if (!st) return;
+  int v = (int)seqPadMode() + st;
+  if (v < 0) v = 0;
+  if (v > 1) v = 1;
+  seqPadModeSet((uint8_t)v);
+}
+const char *seqPadModeName(uint8_t m) { return m ? "SELECT" : "LIVE"; }
 
 // GNR8 BASS mapping mode (see SeqClock.h): global, boot NEAR; the
 // reserved config byte b[2] holds it (legacy blocks read 0 = NEAR there,

@@ -31,12 +31,14 @@ static const ModeBinding table[3][4] = {
 // CC banks, held-step rows).  "--" = no idle binding (the knob only comes
 // alive under its page/radio, e.g. ENC7 = the POLY FX/TYPE dial).  The
 // SEQ row's ENC2-4 read LISTEN/PLAY/OVERDUB: idle labels, but the knobs
-// only turn with the step-edit radio on (like GATE/VEL on row 2)
+// only turn with the step-edit radio on (like GATE/VEL on row 2).  ENC7 is
+// ACCENT velocity in SEQMODE for every track type (a POLY step-edit arm
+// repaints it to FX / TYPE while those targets are engaged)
 static const char* encLabels[ENC_SET_COUNT][8] = {
-  /* ENC_SEQ          */ { "OCT", "LISTEN", "PLAY", "OVERDUB", "GATE", "VEL", "--", "PROB" },
-  /* ENC_SEQ2         */ { "OCT", "LISTEN", "PLAY", "OVERDUB", "GATE", "VEL", "--", "PROB" },
+  /* ENC_SEQ          */ { "OCT", "LISTEN", "PLAY", "OVERDUB", "GATE", "VEL", "ACC", "PROB" },
+  /* ENC_SEQ2         */ { "OCT", "LISTEN", "PLAY", "OVERDUB", "GATE", "VEL", "ACC", "PROB" },
   /* ENC_SEQ3         */ { "OCT", "LEN", "FOLLOW", "SPEED", "INCH", "TRACK", "TYPE", "BPM" },
-  /* ENC_SEQ4         */ { "SWING", "AMT", "EXT IN", "SRC", "GATE", "VEL", "--", "PROB" },
+  /* ENC_SEQ4         */ { "SWING", "AMT", "EXT IN", "SRC", "GATE", "VEL", "ACC", "PROB" },
   /* ENC_ENC          */ { "CC17", "CC18", "CC19", "CC20", "CC1", "CC2", "CC3", "CC4" },
   /* ENC_ENC2         */ { "CC17", "CC18", "CC19", "CC20", "CC1", "CC2", "CC3", "CC4" },
   /* ENC_ENC3         */ { "CC17", "CC18", "CC19", "CC20", "CC1", "CC2", "CC3", "CC4" },

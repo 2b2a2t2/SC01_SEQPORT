@@ -250,6 +250,16 @@ uint8_t seqFollowModeOf(uint8_t ch);     // per-track mode 0..2
 bool seqFollowFreezeOf(uint8_t ch);      // true when that track is FREEZE
 void seqFollowModeSet(uint8_t m);        // edit track (ENC3 cycles 0..2)
 void seqFollowModeSetOf(uint8_t ch, uint8_t m); // restore (seqCfgLoad), clamped
+// SEQMODE3 PAD knob (ENC3, DRUM track only): LIVE = a keyboard press picks
+// the drum voice AND sounds it, SELECT = picks it silently (no MIDI).
+// Per track, persisted in the SEQ EEPROM block (0 = LIVE, 1 = SELECT)
+uint8_t seqPadMode();                    // edit track's PAD mode
+uint8_t seqPadModeOf(uint8_t ch);        // per-track mode 0=LIVE 1=SELECT
+bool seqPadSelectOf(uint8_t ch);         // true = that track is SELECT
+void seqPadModeSet(uint8_t m);           // edit track (ENC3 toggles)
+void seqPadModeSetOf(uint8_t ch, uint8_t m);   // restore (seqCfgLoad), clamped
+void seqPadModeAdjust(int16_t counts);   // 4 counts = 1 state, clamped
+const char *seqPadModeName(uint8_t m);   // "LIVE" / "SELECT"
 // GNR8 BASS mapping (F2 ENC3) + LEAD melody resolution: how FOLLOW
 // re-resolves a generated step note onto the incoming chord - NEAR =
 // nearest chord tone inside the LOW..RANGE window, ROOT = the chord's
