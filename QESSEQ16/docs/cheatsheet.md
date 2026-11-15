@@ -41,6 +41,11 @@ alive under its page or radio).
 and `ENC6` reads `RATCH` (`2` / `3` / `4`) while the DRUM ratchet target is armed — a tap
 stamps that count on the step's **selected drum part**; only that part re-triggers.
 
+`GATE` / `VEL` (ENC5 / ENC6) turn on **every** SEQ track with the edit radio armed: they
+shape DRUM and POLY playback as well as MONO (gate % and note velocity of the edit channel),
+and give the slot back to `RATCH` (DRUM) or `SUB` / `INV` (POLY `EMB`) while those targets
+are up.
+
 `ENC 5–8` in ENCMODE print the live CC number of the armed bank: `CC1–CC4` in page group 1,
 `CC21–CC24` in group 2.
 

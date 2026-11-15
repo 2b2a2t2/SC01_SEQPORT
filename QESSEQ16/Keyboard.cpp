@@ -3963,12 +3963,13 @@ static void seqAdvanceOnce(bool start, const bool *go,
       // sounded, count-1 repeats follow on that voice's own grid
       uint8_t rnote[CHORD_MAX], rvel[CHORD_MAX], rcnt[CHORD_MAX];
       uint8_t ratN = 0;
+      bool inlineOn = false;      // a note actually went out on this path
       for (uint8_t i = 0; i < len && i < CHORD_MAX; i++) {
         uint8_t raw = ch[i];
         // DRUM voices muted in the ENCMODE overlay stay silent (match the
         // stored note, like the part select - the octave shift applies after)
         if (drumTrack && drumVoiceMuted(raw)) continue;
-        uint8_t dvel = (att & SEQ_ATT_ACCENT) ? seqAccVel[c] : KEY_VEL;
+        uint8_t dvel = (att & SEQ_ATT_ACCENT) ? seqAccVel[c] : seqVel[c];
         // FX color ghost: the approach note rides in at half velocity so
         // it whispers under the chord it leads into (FX is never DRUM/MONO)
         if (fxm && i >= nCore) {
@@ -4013,6 +4014,7 @@ static void seqAdvanceOnce(bool start, const bool *go,
           seqNotes[c][seqLen[c]] = note;
           seqOutOn(c, note, dvel);
           seqLen[c]++;
+          inlineOn = true;
           if (rn > 1 && ratN < CHORD_MAX) {   // remember it for the repeats
             rnote[ratN] = note;
             rvel[ratN] = dvel;
@@ -4050,7 +4052,15 @@ static void seqAdvanceOnce(bool start, const bool *go,
       } else if (compOn && sn) {
         compEnqueue(c, snote, svel, sn, sd);   // stabs at the Euclid slots
       } else if (ratN) {
+        // the ratchet queue owns this step's releases: a gate timer would
+        // fire releaseCh mid-repeat and cancel it (like MONO's TIE/GLIDE)
         ratArm(c, rnote, rvel, rcnt, ratN, sd, now);  // repeats in the step
+      } else if (inlineOn && sd && seqGate[c] < 100) {
+        // GATE of the edit channel (the MONO row's knob) now shapes the
+        // inline sends too: release at the same % of the step.  Strum and
+        // COMP took their own path above (they own their releases), and
+        // 100 = hold until the step boundary
+        gateOffAt[c] = now + (sd * (uint32_t)seqGate[c]) / 100;
       }
     }
   }
@@ -4346,10 +4356,10 @@ void seqOctaveShiftAdjust(int16_t counts) {
 
 int seqOctaveShift() { return seqOct[seqEditCh]; }
 
-// ENC5 in SEQMODE (MONO + step-edit): gate time of the edit sequence as a
-// % of one measured step, 1 count = 1% (encDrain, so 4% per detent and more
-// when spun), clamped 10..100 (100 = hold until the next step).  Track
-// parameters survive an erase (like seqOct)
+// ENC5 in SEQMODE (step-edit radio, every track type): gate time of the
+// edit sequence as a % of one measured step, 1 count = 1% (encDrain, so
+// 4% per detent and more when spun), clamped 10..100 (100 = hold until the
+// next step).  Track parameters survive an erase (like seqOct)
 void seqGateAdjust(int16_t counts) {
   int16_t st = encDrain(counts, &gateSRes);
   if (!st) return;
@@ -4361,8 +4371,9 @@ void seqGateAdjust(int16_t counts) {
 
 int seqGatePct() { return seqGate[seqEditCh]; }
 
-// ENC6 in SEQMODE (MONO + step-edit): default note velocity of the edit
-// sequence, 4 counts = 1, clamped 1..127 (accented steps use seqAccVel)
+// ENC6 in SEQMODE (step-edit radio, every track type): default note velocity
+// of the edit sequence, 4 counts = 1, clamped 1..127 (accented steps use
+// seqAccVel)
 void seqVelocityAdjust(int16_t counts) {
   velSRes += counts;
   int16_t st = 0;

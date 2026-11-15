@@ -6,6 +6,28 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### `GATE` / `VEL` on every track type
+
+- **`GATE` (ENC5) and `VEL` (ENC6) now shape DRUM and POLY playback too, not only MONO**: the
+  row has always *labelled* those two slots `GATE` / `VEL` on every track, and with the
+  **step-edit radio armed** the knobs now turn on a DRUM or POLY track as well — they edit the
+  **edit channel's** own values and the track **hears** them: notes leave at the track's `VEL`
+  and release at the `GATE` % of the step, exactly the shaping MONO always had (accented hits
+  still use the accent velocity).
+- **Compatibility — DRUM/POLY note velocity changed**: those tracks were sent at a hard-wired
+  `KEY_VEL` **100** and now use the track's `VEL`, which **boots at 90** (the value MONO has
+  always used). `VEL` has been saved per channel in the SEQ block all along — it simply was
+  not read on playback — so a channel you once dialled as MONO keeps the value you set and an
+  untouched one now plays at **90**. `GATE` boots at **100 = hold to the step boundary**, so
+  gate length is unchanged until you turn it. A side benefit: the accent velocity (boot
+  **101**) now sits clearly above the default instead of one count above it.
+- The knobs keep the **radio gating** (they only turn with the M1 edit radio on) and still
+  **yield the slot to whatever owns it**: the DRUM `RATCHET` target keeps `ENC6` for its armed
+  count, POLY's `EMB` target keeps `ENC5` / `ENC6` as `SUB` / `INV`, and an open M2 page keeps
+  its own bindings. A **ratcheted, strummed or COMP-stabbed** step keeps its own release
+  timing — those queues own the voice, so the gate timer stays unarmed on them (firing would
+  cut the repeats short, the same reason MONO's TIE/GLIDE steps skip it).
+
 ### The BASS page drops the GNR8 name
 
 - **The MONO/BASS M2 page is now called `BASS` everywhere**: the control legend reads `BASS`

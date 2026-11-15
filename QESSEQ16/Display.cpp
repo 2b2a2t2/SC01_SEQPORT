@@ -383,7 +383,8 @@ void refreshMainScreen() {
   // ENC2 + MAP on ENC3, F3 = BRW on ENC3, F4 = PROB on ENC4 - the rest
   // idle; the rotate row still wins whenever PREV is held)
   uint8_t gSub = (genP && !seqOv) ? genOptionSel() : 0xFF;
-  // SEQMODE + DRUM/POLY + radio on: only ENC8 (track probability) is bound
+  // SEQMODE + DRUM/POLY + radio on: ENC5/6 are the MONO row's gate/vel
+  // knobs (live here too), ENC8 the track probability
   bool seqDrumGe = (modeBase == MODE_SEQ && modeVariant != 3 &&
                     seqTrack() != SEQ_TRACK_MONO && stepEditIsOn());
   // ENC7 = ACCENT velocity (all track types) in SEQMODE: the label/value
@@ -765,7 +766,9 @@ void refreshMainScreen() {
       static const char* sl[4] = { "GATE", "VEL", "---", "PROB" };
       l2 = sl[c];
     } else if (seqDrumGe) {
-      static const char* sl[4] = { "---", "---", "---", "PROB" };
+      // the MONO row's GATE/VEL knobs, live on DRUM/POLY too (the
+      // step-edit targets below override ENC5/6 when they own them)
+      static const char* sl[4] = { "GATE", "VEL", "---", "PROB" };
       l2 = sl[c];
     } else if (modeBase == MODE_ENC) {
       // ENC5..8 follow the F1..F4 CC bank in the active M3 page group
@@ -891,11 +894,17 @@ void refreshMainScreen() {
     } else if (seqGe && 4 + c == 7) {
       snprintf(val, sizeof(val), "%d%%", seqProbPct());  // ENC8 = track probability
     } else if (seqDrumGe && 4 + c == 4) {
-      snprintf(val, sizeof(val), "");                    // ENC5 free
+      if (stepEditSel() == 7)
+        snprintf(val, sizeof(val), "");  // EMB SUB owns ENC5 (no knob)
+      else
+        snprintf(val, sizeof(val), "%d%%", seqGatePct());  // ENC5 = gate
     } else if (seqDrumGe && 4 + c == 5) {
       if (stepEditSel() == 8)
         snprintf(val, sizeof(val), "%u", stepRatArmSel());  // ENC6 = ratchet
-      else snprintf(val, sizeof(val), "");       // ENC6 free
+      else if (stepEditSel() == 7)
+        snprintf(val, sizeof(val), "");  // EMB INV owns ENC6 (no knob)
+      else
+        snprintf(val, sizeof(val), "%d", seqVelocity());    // ENC6 = vel
     } else if (seqDrumGe && 4 + c == 6) {
       if (stepEditSel() == 7) {
         // EMB target: show SUB/INV/PAS/COL for focused step

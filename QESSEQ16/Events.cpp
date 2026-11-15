@@ -72,6 +72,12 @@ static bool stepEditAccCtx() {
          (seqTrack() == SEQ_TRACK_DRUM || seqTrack() == SEQ_TRACK_POLY);
 }
 
+// the gate/vel knobs (ENC5/6) are the MONO row's, but they shape every
+// track type: same context for all three, no track test
+static bool stepEditKnobCtx() {
+  return modeBase == MODE_SEQ && modeVariant != 3;
+}
+
 // true while an ATTRIBUTE target is engaged for the current track: MONO =
 // TIE/GLIDE/ACCENT/PROB (1..4), POLY = ACCENT/PROB plus the FX target (5)
 // and the TYPE target (6), EMB target (7), DRUM = ACCENT/PROB (3,4) plus the
@@ -3471,7 +3477,13 @@ void handleEncoderEvents() {
                 Serial.println(seqRecOverdubName(seqRecOverdub()));
               }
             }
-          } else if (ei == 4 && stepEditCtx()) {
+          // ENC5/6 = GATE / VEL of the edit channel on every track type
+          // (the MONO row's two knobs, labelled the same everywhere; DRUM
+          // and POLY hear the values too).  A target that owns the encoder
+          // still wins: POLY EMB (7) labels ENC5/6 SUB/INV, the DRUM
+          // RATCHET target (8) takes ENC6
+          } else if (ei == 4 && stepEditKnobCtx() &&
+                     !(seqTrack() == SEQ_TRACK_POLY && stepEditTarget == 7)) {
             seqGateAdjust(ed);
             headerAnnounceInt("Gate", seqGatePct(), "%");
             if (logRoom(48)) {
@@ -3479,7 +3491,9 @@ void handleEncoderEvents() {
               Serial.print(seqGatePct());
               Serial.println("%");
             }
-          } else if (ei == 5 && stepEditCtx()) {
+          } else if (ei == 5 && stepEditKnobCtx() &&
+                     !(seqTrack() == SEQ_TRACK_POLY && stepEditTarget == 7) &&
+                     !(seqTrack() == SEQ_TRACK_DRUM && stepEditTarget == 8)) {
             seqVelocityAdjust(ed);
             headerAnnounceInt("Velocity", seqVelocity());
             if (logRoom(48)) {

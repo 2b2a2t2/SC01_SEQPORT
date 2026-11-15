@@ -359,7 +359,7 @@ void    handRingCut(uint8_t c);
 // corrupt block keeps the defaults
 void seqCfgSave();
 void seqCfgLoad();
-void seqGateAdjust(int16_t counts);   // ENC5: 4 counts = 5%, clamped 10..100
+void seqGateAdjust(int16_t counts);   // ENC5: 1 count = 1%, clamped 10..100
 int  seqGatePct();                    // edit track's gate (% of one step)
 void seqVelocityAdjust(int16_t counts); // ENC6: 4 counts = 1, clamped 1..127
 int  seqVelocity();                   // edit track's default velocity
