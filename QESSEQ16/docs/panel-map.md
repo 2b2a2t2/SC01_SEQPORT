@@ -71,7 +71,7 @@ the only locked variant. Everything else is sticky until you change it.
 
 | State | Lifetime |
 |---|---|
-| Patterns, steps, per-step attributes, per-step GNR8 modifiers, SKANK locks | RAM — lost on power cycle, by design |
+| Patterns, steps, per-step attributes, per-step BASS modifiers, SKANK locks | RAM — lost on power cycle, by design |
 | Track settings, generator knobs, page settings, per-channel mode memory | EEPROM, saved with `SEQ 4 + REC` |
 | CC knob positions per channel | EEPROM, saved with `ENC 4 + REC` |
 | LEAD per-contour cache | Session RAM |

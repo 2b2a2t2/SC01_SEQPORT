@@ -2,8 +2,8 @@
 
 #include <Arduino.h>
 
-// --- GNR8: generative pattern page (SEQMODE variants 1/2/4) ----------------
-// Active only while the edit track is MONO with TYPE = BASS ("GNR8" -
+// --- BASS: generative pattern page (SEQMODE variants 1/2/4) ----------------
+// Active only while the edit track is MONO with TYPE = BASS ("BASS" -
 // the acid generator; ROOT / ARP / STRUM and every other track type keep
 // their existing controls).  M2 clicks the encoder page on/off:
 //   ENC2 = FILL%  ENC3 = ACC%  ENC4 = GLIDE%  ENC7 = TIE%
@@ -43,7 +43,7 @@ enum SeqGenAlgo : uint8_t {    // step placement
 // the melodic shape the generator walks - ARCH rises to a peak mid-pattern
 // then falls back, DESC steps down across the pattern (wraps), WALK is a
 // random ±1/±2 scale-step walk (reflects at the window edges).  The line
-// snaps to the KEY + SCALE inside the LOW..RANGE window (shared with GNR8).
+// snaps to the KEY + SCALE inside the LOW..RANGE window (shared with BASS).
 enum SeqLeadContour : uint8_t {
   SEQ_LEAD_ARCH = 0, SEQ_LEAD_DESC, SEQ_LEAD_WALK
 };
@@ -89,12 +89,12 @@ const char* seqGenAlgoName(uint8_t v);       // "CLASSIC" "EUCLID"
 // notes written, -1 = refused (bad channel / empty pattern)
 int  seqGenProduce();
 
-// one lazy randomSeed() shared by every roll (GNR8/LEAD produce, the HARM
+// one lazy randomSeed() shared by every roll (BASS/LEAD produce, the HARM
 // bake's FILL gate): the first roll after boot picks the seed
 void genSeedOnce();
 
 // LEAD contour knob + the melody generator (M2 LEAD page, M3 tap = gen /
-// hold = undo, mirroring GNR8).  seqLeadProduce() walks the contour over
+// hold = undo, mirroring BASS).  seqLeadProduce() walks the contour over
 // the in-scale ladder of the LOW..RANGE window: ARCH rises to a mid-pattern
 // peak then falls, DESC steps down (wraps), WALK random-walks ±1/±2 scale
 // steps.  Rhythm = the shared FILL% density gate (classic or euclid via

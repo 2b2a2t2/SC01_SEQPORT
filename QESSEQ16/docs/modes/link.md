@@ -69,7 +69,7 @@ momentary hold) — picking a channel there also tells Live which track to selec
 | Probability | a **PROB** step carries its probability as the note's `probability` (Live rolls it) |
 
 KLOCK/scale snapping is **not** applied — Live has its own scale devices. A track with
-**FOLLOW/STRUM/GNR8** dumps the steps it *stored*, not the notes its engine derives at
+**FOLLOW/STRUM/BASS** dumps the steps it *stored*, not the notes its engine derives at
 playback: the engine's output is not a pattern, so it cannot be written down.
 
 A **scene fill** (M3 + F2) writes all 16 tracks into `tracks[n].clip_slots[row]`, where

@@ -6,6 +6,52 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### The BASS page drops the GNR8 name
+
+- **The MONO/BASS M2 page is now called `BASS` everywhere**: the control legend reads `BASS`
+  (it said `GNR8`), and the docs and comments use the name too (`docs/generators/gnr8.md` is
+  now `bass.md`). GNR8 was the shorthand from when this was the *only* generator — with LEAD,
+  HARM, SKANK, ARP and the drum styles around it no longer meant anything, while the track
+  type has said BASS all along. No behavior change: the header still reads `GENERATOR`, M3
+  still generates/undoes, and saved settings are untouched (`SEQ_EE_LEN_GNR8` keeps the
+  historical constant name).
+
+### ENCMODE: `PREV` opens a CC CONFIG page
+
+- **A `PREV` click in ENCMODE now opens a `CC CONFIG` page**: the eight knobs listed as
+  `ENC1 CC17` … `ENC8 CC4` — the numbers the dials can only fit as a 4×6 caption in the
+  ring's bottom notch. The page reads the live `encCcNum()`, so `F1–F4` and the `M3` page
+  group move what it prints, and the header names the encoder channel it sends on. It is
+  informational: every knob keeps sending while it is up. A second click returns to the
+  dials, and the page closes with the family like every other page; `PREV`'s control label
+  reads `CONFIG` while the family is up.
+- **The map behind those numbers is now a file you can edit**: `CcConfig.h` holds the four
+  fixed CCs and the 4×4 block per page group, and `encCcNum()` only looks numbers up there —
+  a remap therefore moves the MIDI send, the dial captions and the `CC CONFIG` page at once,
+  with no other code touched. Entries are clamped to **CC 1–36**, the range the
+  per-CC-per-channel value store (RAM + the 579-byte EEPROM block) can hold.
+
+### Leaving a page (or moving TRACK / TYPE) lands back on step edit
+
+- **Closing an M2 page with its own `M2` press — and turning the `TRACK` or `TYPE` knob — now
+  lands back on step edit**: the edit radio comes back on with **M1 (STEPS)**, exactly like
+  choosing a channel already did. Previously a DRUM pattern detour (or ARP / BASS / LEAD /
+  HARM / COMP / SKANK) left the radio off after the page closed, and a `TRACK` / `TYPE` change
+  dismissed the pages it had to without ever touching the radio — either way the player had to
+  hunt for `M1` to get the step pads editing again. A radio that is already on keeps its
+  target, so the knob that moves a track never steals a live edit session
+  ([ADR 0004](docs/adr/0004-one-radio-at-a-time.md)).
+
+### M1 closes an open M2 page — every track type
+
+- **Pressing `M1` while an M2 page is open now closes the page on every track type**: a quick
+  tap on a DRUM track with the **DRUM pattern page** up (or HARM / COMP / SKANK on POLY) drops
+  the page and arms the edit radio in the same press, and arming an **F1–F4** target does the
+  same. The one-radio rule ([ADR 0004](docs/adr/0004-one-radio-at-a-time.md), already promised
+  by the cheat sheet) only ever ran on the MONO branch and only while the radio was off, so the
+  DRUM/POLY paths could leave a page sitting under an armed radio — from there only the
+  page's own `M2` press would leave it.
+
 ### SEQMODE3: KEY button releases the committed keyboard row
 
 - **Touching the `KEYBOARD` mode button now immediately releases the SEQMODE3 bar/verb
@@ -41,7 +87,7 @@ de-facto version marker is the size of the saved-settings block (see
 - **Accent velocity moved to `ENC7` (`ACC`) in SEQMODE 1/2/4, for every track type** — the old
   F3-hold that borrowed ENC6 is retired (one knob, one job; ENC6 keeps `VEL`). ENC7 yields to
   the POLY step-edit `FX`/`TYPE`/`EMB` targets while they are engaged and to the M2 pages that
-  bind it (**GNR8 `TIE`, ARP `INST`, LEAD `DENS`, SKANK `TES%`**), and the DRUM pattern page /
+  bind it (**BASS `TIE`, ARP `INST`, LEAD `DENS`, SKANK `TES%`**), and the DRUM pattern page /
   SEQ overlays keep their rows while open. Legend rows for SEQ 1/2/4 now read `ACC` instead of
   `--`.
 

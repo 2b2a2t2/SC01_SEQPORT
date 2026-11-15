@@ -9,7 +9,7 @@ track, a KEY 4 progression, or your hands.
 
 1. `SEQUENCER 3`: **ENC6 = TRACK** to a free track, **ENC7 = TYPE** to `MONO`, then the
    MONO transform to `BASS`. **M2** now burns **blue**.
-2. Press **M2** to open the GNR8 page (`GENERATOR` in the header).
+2. Press **M2** to open the BASS page (`GENERATOR` in the header).
 3. **ENC2** (`FILL`) to taste — 50 is a good start, 100 fills every step.
 4. **ENC3** (`ACC`) and **ENC4** (`GLIDE`) set the per-note accent and glide odds.
 5. Arm **F1** (`OPTS`) for the full option page: **ENC1 TONES** (all / 5 / 4 / 3),
@@ -43,4 +43,4 @@ under it.
   knobs persist with `SEQ 4 + REC`.
 - `FOLLOW OFF` ignores MAP and BRW entirely.
 
-See [GNR8](../generators/gnr8.md) and [Sequencer](../modes/seqmode.md).
+See [BASS](../generators/bass.md) and [Sequencer](../modes/seqmode.md).

@@ -25,7 +25,7 @@ static uint8_t genLow[16]   = { 1, 1, 1, 1, 1, 1, 1, 1,
 static uint8_t genRange[16] = { 2, 2, 2, 2, 2, 2, 2, 2,
                                 2, 2, 2, 2, 2, 2, 2, 2 };   // 2 octaves
 // LEAD melodic contour (M2 LEAD page).  Boot ARCH everywhere.  Shares the
-// FILL/LOW/RANGE slots with GNR8 (a track is one TYPE or the other), so
+// FILL/LOW/RANGE slots with BASS (a track is one TYPE or the other), so
 // only the contour is new storage.
 static uint8_t leadContour[16] = { 0 };          // SEQ_LEAD_ARCH
 static int16_t genLeadRes;                       // contour residual (4 = 1)
@@ -241,7 +241,7 @@ static uint8_t genSnapNote(uint8_t note) {
   return note;
 }
 
-// one lazy randomSeed() for every generator's rolls (GNR8/LEAD produce,
+// one lazy randomSeed() for every generator's rolls (BASS/LEAD produce,
 // the HARM bake's FILL gate): the first roll of a boot picks the seed
 void genSeedOnce() {
   static bool seeded = false;
@@ -313,7 +313,7 @@ int seqGenProduce() {
 // or Bjorklund/Euclid via ALGO); the pitch follows the contour (ARCH rises
 // to a mid-pattern peak then falls, DESC steps down and wraps, WALK random
 // -walks ±1/±2 scale steps and reflects at the ends).  Notes stay in the
-// KEY + SCALE.  Stored like GNR8 (one note per step, undo snapshot first).
+// KEY + SCALE.  Stored like BASS (one note per step, undo snapshot first).
 // At playback LEAD + FOLLOW + MAP (ct/gd) re-resolves these skeleton notes
 // onto the feeder track's chord - see mapBassNote() in Keyboard.cpp.
 // shared LEAD write path: roll the fill rests and walk the contour over

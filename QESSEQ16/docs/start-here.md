@@ -58,7 +58,7 @@ More: [Encoder mode](modes/encmode.md).
 
 1. Build a chord progression in `KEYBOARD 4` (18 genre grammars) or just play chords in
    `KEYBOARD 2`.
-2. On a MONO track with **TYPE = BASS**, press **M2** → the GNR8 page. **M3** generates a
+2. On a MONO track with **TYPE = BASS**, press **M2** → the BASS page. **M3** generates a
    bassline; **M3 hold** undoes it.
 3. Point a second MONO track (**TYPE = ARP** or **LEAD**) at the bass track: `SEQUENCER 3`,
    **ENC5 = INCH** to the bass track's channel, **ENC3 = FOLLOW** on.

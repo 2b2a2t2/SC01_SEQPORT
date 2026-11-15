@@ -10,7 +10,7 @@ attributes + masks is a lot of EEPROM to rewrite on every edit.
 
 ## Decision
 
-- **Step content** — notes, attributes, FX, per-step GNR8 modifiers, strum onsets, drum
+- **Step content** — notes, attributes, FX, per-step BASS modifiers, strum onsets, drum
   masks, SKANK locks — lives in RAM and dies with the power.
 - **Track and global settings** — length, speed, follow, input channel, type, generator
   knobs, swing, key, scale, tempo — persist, saved explicitly with `SEQ 4 + REC`.

@@ -50,7 +50,7 @@ docs/
 │   └── drum.md            DRUM part sequencing
 ├── generators/
 │   ├── arp.md             arpeggiator + 4 sub-pages
-│   ├── gnr8.md            bassline generator
+│   ├── bass.md            bassline generator
 │   ├── lead.md            melody generator
 │   ├── comp.md            chord stabs
 │   ├── harm.md            progression inference

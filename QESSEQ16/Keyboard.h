@@ -466,7 +466,7 @@ bool           stepChordSame(uint8_t step, const uint8_t *notes, uint8_t n);
 void           harmFeederChanged(uint8_t ch0);
 void           harmRebakePoll();
 
-// GNR8 generator write path (Gen.cpp drives it): one note per step,
+// BASS generator write path (Gen.cpp drives it): one note per step,
 // stamped like stepChordWrite (octave pre-compensated, followers and the
 // shift range re-derived) plus the accent/glide mask the generator rolled;
 // stepGenClear empties a step the roll turned into a rest.  The rotate
@@ -482,7 +482,7 @@ int      stepSkeletonWrite(uint8_t step, uint8_t stored);  // LEAD flip restore
 void     stepShiftPattern(uint8_t n, int8_t dir);
 uint8_t  stepAttrChain(uint8_t from, uint8_t to, uint8_t att);
 
-// GNR8 per-step pitch modifiers (F2/F3/F4): edit-sequence accessors,
+// BASS per-step pitch modifiers (F2/F3/F4): edit-sequence accessors,
 // clamped on set (octave -2..+2, borrowed chord tone 0..8 = off..n-th,
 // modifier probability 0..100)
 int8_t   stepOctAt(uint8_t step);

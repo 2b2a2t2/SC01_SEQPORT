@@ -5,7 +5,7 @@
 ## Context
 
 Twelve mode/variant combinations, plus held-key overlays (PREV, a held step), plus per-track
-pages (ARP, GNR8, LEAD, COMP, HARM, SKANK, DRUM), plus CC banks. Handling that with
+pages (ARP, BASS, LEAD, COMP, HARM, SKANK, DRUM), plus CC banks. Handling that with
 conditionals inside the event handlers produced a dispatch that was impossible to reason
 about: every new page added a branch to every handler.
 

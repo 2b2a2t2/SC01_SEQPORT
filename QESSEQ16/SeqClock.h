@@ -260,7 +260,7 @@ void seqPadModeSet(uint8_t m);           // edit track (ENC3 toggles)
 void seqPadModeSetOf(uint8_t ch, uint8_t m);   // restore (seqCfgLoad), clamped
 void seqPadModeAdjust(int16_t counts);   // 4 counts = 1 state, clamped
 const char *seqPadModeName(uint8_t m);   // "LIVE" / "SELECT"
-// GNR8 BASS mapping (F2 ENC3) + LEAD melody resolution: how FOLLOW
+// BASS mapping (F2 ENC3) + LEAD melody resolution: how FOLLOW
 // re-resolves a generated step note onto the incoming chord - NEAR =
 // nearest chord tone inside the LOW..RANGE window, ROOT = the chord's
 // lowest tone (octave-shaped), DEGREE = scale degree -> Nth chord tone,

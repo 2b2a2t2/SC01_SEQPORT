@@ -38,10 +38,10 @@ These are documented because they surprise people, not because they are bugs.
 - **A page and the edit radio cannot coexist.** Opening one closes the other, and the armed
   sub-page dies with its page.
 - **Some per-step values are RAM only** even though the page knobs beside them persist:
-  GNR8's OCT / BRW / PROB and SKANK's locks. Every step field behaves this way.
+  BASS's OCT / BRW / PROB and SKANK's locks. Every step field behaves this way.
 - **Regenerating clears step content** for the steps it writes. M3-hold restores one level.
 - **An armed attribute needs its prerequisites.** A TIE span on a bass track only works
-  with the GNR8 page **closed** and M1 + TIE armed.
+  with the BASS page **closed** and M1 + TIE armed.
 - **`FOLLOW OFF` ignores MAP and BRW.** The line plays as generated; only the chord changes
   make a difference.
 - **Mute gates the output, not the engine.** A muted track still plays internally and still

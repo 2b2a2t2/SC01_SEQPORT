@@ -1044,7 +1044,7 @@ void seqPadModeAdjust(int16_t counts) {
 }
 const char *seqPadModeName(uint8_t m) { return m ? "SELECT" : "LIVE"; }
 
-// GNR8 BASS mapping mode (see SeqClock.h): global, boot NEAR; the
+// BASS mapping mode (see SeqClock.h): global, boot NEAR; the
 // reserved config byte b[2] holds it (legacy blocks read 0 = NEAR there,
 // old clipboard junk >3 is rejected by seqMapSet)
 static uint8_t mapMode = SEQ_MAP_NEAR;

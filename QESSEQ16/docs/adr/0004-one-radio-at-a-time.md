@@ -6,7 +6,7 @@
 
 Two features want the same hardware at the same time. The **step-edit radio** (M1 + TIE /
 GLIDE / ACCENT / PROB) needs the step pads to edit attributes and the encoder row for gate
-and velocity. A **track page** (M2: ARP, GNR8, LEAD, COMP, HARM, SKANK, DRUM) needs the same
+and velocity. A **track page** (M2: ARP, BASS, LEAD, COMP, HARM, SKANK, DRUM) needs the same
 pads to pick a step and the same row for its knobs.
 
 Both could be "open" simultaneously only by splitting the row, which the 8-knob panel cannot
@@ -18,13 +18,18 @@ They are mutually exclusive. Opening a page turns the M1 radio **off**; pressing
 page is open **closes the page**. The same rule repeats inside pages: arming one F takes the
 entire encoder row, and the armed sub-page dies when its page closes.
 
+The exchange is symmetric: leaving a page through **its own** M2 press, and moving the edit
+track's **TRACK** or **TYPE** knob, always **lands back on step edit** — the radio comes back
+on with the STEPS target, exactly like a channel switch. A radio that is already on keeps its
+target, so a knob that moves the track never steals a live edit session.
+
 ## Consequences
 
 - The rule is predictable and visible (the pad and the header both show which one is live),
   at the cost of one extra gesture for workflows that need both.
 - A page must carry its own path to GATE / VEL / PROB, because turning the radio off took
   the row's normal path away.
-- The TIE span on a bass track requires closing GNR8 first — the most-reported trap in the
+- The TIE span on a bass track requires closing the BASS page first — the most-reported trap in the
   instrument, and documented as such in [Cheat sheet](../cheatsheet.md).
 - A page cannot be "half armed": the picked step, the armed F and the page state all reset
   together, so there is no stale selection to reason about.

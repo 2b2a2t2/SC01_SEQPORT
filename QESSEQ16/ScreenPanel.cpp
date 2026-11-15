@@ -278,13 +278,12 @@ static const FullName kFullNames[] = {
   { "CMNTN",  "COMMON TONE" },
   { "ANTE",   "ANTECEDENT" },
   { "VAR",    "VARIANT" },
-  // ARP / GNR8 / LEAD / SKANK pages
+  // ARP / BASS / LEAD / SKANK pages
   { "RNG",    "RANGE" },
   { "ALGO",   "ALGORITHM" },
   { "BRW",    "BORROW" },
   { "ACC",    "ACCENT" },
   { "GEN",    "GENERATE" },
-  { "GNR8",   "GENERATE" },
   { "ARP",    "ARPEGGIO" },
   { "ORD",    "ORDER" },
   { "MOT",    "MOTION" },

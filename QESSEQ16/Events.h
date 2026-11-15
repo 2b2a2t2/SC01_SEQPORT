@@ -17,7 +17,9 @@ void handleEncoderEvents();
 uint8_t encCcValue(uint8_t idx);
 
 // CC number encoder 0..7 currently sends - the single source of truth
-// for the MIDI send, the OLED labels and the DAW-feedback mapping
+// for the MIDI send, the OLED labels and the DAW-feedback mapping.  The
+// numbers themselves are the editable map in CcConfig.h (defaults: ENC1..4 =
+// CC17..20, ENC5..8 = the armed F bank's block, CC1..16 / CC21..36)
 uint8_t encCcNum(uint8_t ei);
 
 // ENCMODE F1..F4 radio: which CC block ENC5..ENC8 send (0..3 = F1..F4;
@@ -37,6 +39,17 @@ void    encM3MemSet(uint8_t ch, bool on);
 // CC1..16, on = CC21..36; RAM only, off again on ENCMODE entry)
 bool encM3Page();
 void encM3PageSet(bool on);
+
+// ENCMODE CC CONFIG page (a PREV click in the family): the eight knobs with
+// their whole CC numbers, one cell per encoder, instead of the 4x6 caption the
+// dial ring has room for.  The numbers are read from encCcNum() LIVE, so the
+// page follows the F1..F4 bank and the M3 page group by itself.  Informational:
+// a knob keeps sending while the page is up.  RAM only, and like every other
+// page it never outlives the screen it covers
+void ccCfgToggle();
+void ccCfgDismiss();
+bool ccCfgOpen();      // the latch PREV set
+bool ccCfgActive();    // ...and drawable now: ENCMODE 1/2/4, no Live overlay
 
 // incoming CC feedback from the DAW: syncs the ENCMODE knob positions
 // (channel 1..16, CC 1..36); store only, never re-sent
@@ -123,7 +136,7 @@ void strumFRowDismiss();
 bool strumFRowActive();
 
 // SEQMODE M2 (variants 1/2/4) on a MONO+BASS edit track: a click toggles
-// the GNR8 encoder page - ENC2 = fill %, ENC3 = accent %, ENC4 = glide %,
+// the BASS encoder page - ENC2 = fill %, ENC3 = accent %, ENC4 = glide %,
 // ENC7 = tie %; the F row = radio switches for the four option sub-pages
 // (F1 OPTS = TONES/RNG/LOW/ALGO on ENC1-4, F2 = STEP OCT + MAP, F3 =
 // BORROW, F4 = MOD PROB - tap a step first, the armed page dials it;
@@ -149,7 +162,7 @@ int8_t seqTrStepSelGet();
 // SEQMODE M2 (variants 1/2/4) on a MONO+LEAD edit track: a click toggles
 // the LEAD encoder page - ENC2 = contour (ARCH/DESC/WALK), ENC3 = LOW,
 // ENC4 = RANGE, ENC7 = density %; ENC1/5/6/8 keep OCT/GATE/VEL/PROB.
-// M3 tap = generate the melody / M3 hold = undo, mirroring GNR8.
+// M3 tap = generate the melody / M3 hold = undo, mirroring BASS.
 // Composite active check like the arp page: a mid-hold channel / TYPE /
 // mode switch drops the page by itself
 void leadPageToggle();
@@ -159,7 +172,7 @@ bool leadPageActive();
 // SEQMODE M2 (variants 1/2/4) on a POLY+HARM edit track: a click toggles
 // the HARM encoder page - ENC1 = GENRE, ENC2 = FILL, ENC3 = SRC (bass/
 // arp), ENC4 = HOLD.  M3 tap = bake the progression inferred from the
-// FOLLOW feeder's bassline / M3 hold = undo, mirroring GNR8/LEAD.
+// FOLLOW feeder's bassline / M3 hold = undo, mirroring BASS/LEAD.
 // Composite active check like the other pages: a mid-hold channel / TYPE /
 // mode switch drops it by itself
 void harmPageToggle();
@@ -195,7 +208,7 @@ bool drumPageActive();
 uint8_t drumSetSelGet();          // 0..3 = armed F set, 0xFF = base row
 void drumSetSelSet(uint8_t s);
 
-// GNR8 TIE span fill (MONO+BASS, TIE target only): HOLD a step to arm the
+// BASS TIE span fill (MONO+BASS, TIE target only): HOLD a step to arm the
 // span start, the next tap on another step stamps TIE across the span
 // (called on target / mode / channel / track switches so a stale arm can
 // never land on a later edit)

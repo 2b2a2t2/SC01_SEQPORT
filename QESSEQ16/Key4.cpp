@@ -1693,7 +1693,7 @@ static int k4HarmBody(bool automatic) {
   int L = harmInferPath(path, has);
   if (L <= 0) return -1;
   // rhythm of the manual bake: the track's own FILL% / ALGO, the same roll
-  // gate the generators use (GNR8 page ENC2 / F1 ALGO) - a chord lands only
+  // gate the generators use (BASS page ENC2 / F1 ALGO) - a chord lands only
   // on the rolled steps, a fail turns the step to rest, so the baked
   // pattern keeps rests like a bassline instead of filling every step; M3
   // re-rolls the rhythm on every press (M3-hold undoes it).  The automatic

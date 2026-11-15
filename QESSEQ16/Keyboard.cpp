@@ -6,12 +6,12 @@
 #include "Events.h"     // prob clipboard accessors (SEQ save/load)
 #include "Display.h"    // headerShow (strum option / string feedback)
 #include "Key4.h"       // KEYMODE4 proposal gesture (press/release/commit)
-#include "Gen.h"        // GNR8 params (the SEQ EEPROM block stores them)
+#include "Gen.h"        // BASS params (the SEQ EEPROM block stores them)
 #include "Encoders.h"   // encDrain - accelerated 0-100% dials
 #include "Skank.h"      // SKANK derive (POLY TYPE = SKANK playback)
 #include "Drum.h"       // DRUM page params (the SEQ EEPROM block stores them)
 #include "Encoders.h"   // encSetChannel - boot reconcile of a locked ENCOD
-#include "bjorklund.h"  // COMP: Euclid stab pattern (same primitive as GNR8)
+#include "bjorklund.h"  // COMP: Euclid stab pattern (same primitive as BASS)
 #include "Buttons.h"    // EV_* - the hold-M2 layer overlay dispatches keys
 #include <EEPROM.h>
 
@@ -162,7 +162,7 @@ static uint16_t drumProbOn[SEQ_CH_COUNT][STEP_MAX];
 // play straight.  RAM only like every step field: stepAttClear wipes it,
 // SHIFT / paste / undo / double carry it
 static uint8_t stepRatchet[SEQ_CH_COUNT][STEP_MAX][8];
-// GNR8 per-step pitch modifiers (F2/F3/F4 pages on the BASS track):
+// BASS per-step pitch modifiers (F2/F3/F4 pages on the BASS track):
 // octave transposition -2..+2, borrowed chord tone (0 = off, n = n-th
 // tone of the incoming chord, ascending) and the probability % that the
 // two actually apply on a pass (default 100 = always).  RAM only like
@@ -173,7 +173,7 @@ static uint8_t stepModP[SEQ_CH_COUNT][STEP_MAX];
 // per-step semitone transpose -12..+12 (the TRANS knob on the step-hold
 // row): non-destructive playback offset like stepOctM - the stored chord
 // never changes.  RAM only like every step field; rotates with SHIFT and
-// rides the GNR8 snapshot; defaults ride in stepAttClear
+// rides the BASS snapshot; defaults ride in stepAttClear
 static int8_t  stepTrM[SEQ_CH_COUNT][STEP_MAX];
 // per-BAR octave (-2..+2) and semitone TRANS (-12..+12) of a pattern: the
 // SEQ3 keyboard row's held-bar overlay (C D E F) edits these.  One bar =
@@ -298,7 +298,7 @@ static uint8_t layPassPick(uint8_t ch) {
 
 // a step's attributes live and die with its content (both the MONO flags
 // and the DRUM per-voice accent/probability masks and ratchet counts; the
-// POLY FX byte, the HAND strum onsets, the GNR8 oct/borrow/prob modifiers
+// POLY FX byte, the HAND strum onsets, the BASS oct/borrow/prob modifiers
 // and the layer tags too - an empty step never carries a stale layer)
 static void stepAttClear(uint8_t ch, uint8_t st) {
   stepAtt[ch][st] = 0;
@@ -307,7 +307,7 @@ static void stepAttClear(uint8_t ch, uint8_t st) {
   drumAccent[ch][st] = 0;
   drumProbOn[ch][st] = 0;
   memset(stepRatchet[ch][st], 0, sizeof(stepRatchet[ch][st]));
-  stepOctM[ch][st] = 0;          // GNR8 mods: no octave shift, no borrow,
+  stepOctM[ch][st] = 0;          // BASS mods: no octave shift, no borrow,
   stepBrwM[ch][st] = 0;          // modifier always passes (prob 100)
   stepModP[ch][st] = 100;
   stepTrM[ch][st] = 0;           // per-step TRANS: no semitone offset
@@ -382,7 +382,7 @@ static void seqOctClamp(uint8_t s) {
 // stale.  All content writes funnel through stepSyncFrom, which only MARKS
 // the HARM tracks feeding from the changed channel; harmRebakePoll (main
 // loop, before the OLED draw) runs the actual re-bakes, so a burst of
-// writes - a full GNR8 produce, a live knob re-generate - costs one Viterbi
+// writes - a full BASS produce, a live knob re-generate - costs one Viterbi
 // pass instead of one per step.  FOLLOW gates it exactly like the manual M3
 // bake, a track is never marked through its own channel (manual HARM step
 // edits and an M3 bake on track X stand), and a mark whose inference did
@@ -1471,7 +1471,7 @@ const uint8_t* stepChordAtCh(uint8_t ch, uint8_t step, uint8_t *len) {
   return stepChord[ch - 1][step];
 }
 
-// --- GNR8 generator write path (Gen.cpp drives it) -------------------------
+// --- BASS generator write path (Gen.cpp drives it) -------------------------
 // one note per step, stamped exactly like stepChordWrite (pre-compensated
 // for the sequence's octave shift, so the step SOUNDS the note the
 // generator picked; shift range + followers re-derived) plus the
@@ -1561,7 +1561,7 @@ void stepShiftPattern(uint8_t n, int8_t dir) {
 }
 
 // stamp one attribute across from..to-1 (end exclusive, wrapping inside
-// the pattern length) - the GNR8 chain gesture: TIE on X..Y-1 rings X's
+// the pattern length) - the BASS chain gesture: TIE on X..Y-1 rings X's
 // note through step Y with the engine's normal tie semantics
 uint8_t stepAttrChain(uint8_t from, uint8_t to, uint8_t att) {
   if (!att) return 0;
@@ -1580,7 +1580,7 @@ uint8_t stepAttrChain(uint8_t from, uint8_t to, uint8_t att) {
   return cnt;
 }
 
-// --- GNR8 per-step pitch modifiers (F2/F3/F4 pages) -----------------------
+// --- BASS per-step pitch modifiers (F2/F3/F4 pages) -----------------------
 // edit-sequence accessors for the UI; the playhead reads the arrays
 // directly.  Setters clamp: octave -2..+2, borrowed chord tone 0..8
 // (0 = off), modifier probability 0..100
@@ -1799,7 +1799,7 @@ static uint16_t snapDrumA[STEP_MAX];
 static uint16_t snapDrumP[STEP_MAX];
 static uint16_t snapStrumB[STEP_MAX][CHORD_MAX];
 static uint8_t snapLay[STEP_MAX][CHORD_MAX];  // overdub layer tags
-static int8_t  snapOctB[STEP_MAX];      // GNR8 per-step mods
+static int8_t  snapOctB[STEP_MAX];      // BASS per-step mods
 static uint8_t snapBrwB[STEP_MAX];
 static uint8_t snapModP[STEP_MAX];
 static int8_t  snapTrB[STEP_MAX];       // per-step TRANS
@@ -3039,7 +3039,7 @@ static uint16_t spdAcc[SEQ_CH_COUNT];
 static uint8_t  spdGo[SEQ_CH_COUNT];
 static bool     chInRng[SEQ_CH_COUNT];
 
-// --- GNR8 BASS + FOLLOW: map a generated step note onto the incoming chord
+// --- BASS page + FOLLOW: map a generated step note onto the incoming chord
 // The window is the generator's live range (LOW..LOW+RANGE-1) and the
 // content FOLDS into it (foldWin): RANGE 2 -> 1 lowers the upper-octave
 // notes into the new octave, 1 -> 2 raises the original pitches back -
@@ -3733,7 +3733,7 @@ static void seqAdvanceOnce(bool start, const bool *go,
       if (m) { len = m; ch = mapped; }
       if (fxm) nCore = coreOut;        // compaction may have shrunk the core
     }
-    // GNR8 per-step OCT on POLY (the step-hold row's ENC1 / GNR8 F2 page)
+    // BASS per-step OCT on POLY (the step-hold row's ENC1 / BASS F2 page)
     // and per-step TRANS (step-hold row, -12..+12 st): transpose the
     // PLAYBACK copy - the stored step chord never changes, the MONO track
     // keeps its probability-gated OCT roll below (TRANS is a plain offset,
@@ -3763,7 +3763,7 @@ static void seqAdvanceOnce(bool start, const bool *go,
     int8_t tr = seqTransOf(c);       // per-track semitone TRANS (0 on DRUM)
     // the bar this step sits in (the SEQ3 held-bar row edits one bar at a
     // time): its OCT/TRANS fold into the track's own shift pair, so every
-    // engine path below - MONO, POLY, STRUM, GNR8 FOLLOW - inherits them
+    // engine path below - MONO, POLY, STRUM, BASS FOLLOW - inherits them
     // and Klock still snaps the sum instead of the bare track TRANS
     if (seqTrackOf(c) != SEQ_TRACK_DRUM) {
       uint8_t bnr = (uint8_t)(stp >> 4);
@@ -3863,7 +3863,7 @@ static void seqAdvanceOnce(bool start, const bool *go,
           if (arm) gateOffAt[c] = arm;
         } else {
           uint8_t note;
-          // GNR8 per-step modifiers: the roll gates OCT (all mono types)
+          // BASS per-step modifiers: the roll gates OCT (all mono types)
           // and BRW (inside mapBassNote) - no mod set = no roll consumed
           bool hasMod = stepBrwM[c][stp] != 0 || stepOctM[c][stp] != 0;
           bool modOn = !hasMod ||
@@ -4418,7 +4418,7 @@ void seqCompHitsSet(uint8_t i, uint8_t v) {
 // --- SKANK page params (M2 on a POLY+SKANK track) --------------------------
 // 0 TES, 1 MOT, 2 SHP, 3 THN, 4 EXT, 5 SUB, 6 TES%, 7 NOT% - all 0..100,
 // 4 counts = 1 unit, clamped, no wrap (one residual per dial, like the
-// GNR8 option knobs; a focus switch drops the partial turn like every
+// BASS option knobs; a focus switch drops the partial turn like every
 // other dial)
 static uint8_t skankPrmDef(uint8_t idx) { return idx == 1 ? 50 : 0; }
 
@@ -4816,7 +4816,7 @@ uint8_t layArmCmd(void) { return layArm; }
 
 // --- layer undo / redo: 8 full-fidelity snapshots per direction ------------
 // Same field set as the M3 undo slot (chords, lengths, attributes, FX,
-// embellishment params, strum onsets, GNR8 mods, drum masks, SKANK locks)
+// embellishment params, strum onsets, BASS mods, drum masks, SKANK locks)
 // plus the layer tag row and the mute mask - length and speed stay out:
 // no layer command touches them.  Both stacks together ~55 KB of the
 // Teensy's free RAM
@@ -5315,8 +5315,8 @@ static const uint16_t SEQ_EE_LEN_COMP = 420;  // previous: COMP hits[16]
                                               // (b[403..418])
 static const uint16_t SEQ_EE_LEN_LEAD = 404;  // previous: LEAD contour[16]
                                               // (b[387..402])
-static const uint16_t SEQ_EE_LEN_GNR8 = 388;  // previous: GNR8 params (b[259..386])
-static const uint16_t SEQ_EE_LEN_OLD = 260;   // legacy: before GNR8
+static const uint16_t SEQ_EE_LEN_GNR8 = 388;  // previous: BASS params (b[259..386])
+static const uint16_t SEQ_EE_LEN_OLD = 260;   // legacy: before the BASS params
 
 // a LOCKED family takes the hub channel at boot (its own saved channel is
 // stale by definition once the link is on); runs for a loaded block AND for
@@ -5330,7 +5330,7 @@ void seqCfgSave() {
   uint8_t b[SEQ_EE_LEN];
   b[0] = SEQ_EE_MAGIC;
   b[1] = seqEditCh + 1;
-  b[2] = seqMap();                    // GNR8/LEAD mapping mode (0..5; was the
+  b[2] = seqMap();                    // BASS/LEAD mapping mode (0..5; was the
                                       // shared prob clipboard)
   for (uint8_t i = 0; i < SEQ_CH_COUNT; i++) {
     b[3 + i] = (uint8_t)seqOct[i];
@@ -5349,14 +5349,14 @@ void seqCfgSave() {
     b[211 + i] = seqProb[i];                  // playback probability %
     b[227 + i] = seqPatLenOf(i);              // pattern length 0..64
     b[243 + i] = seqFollowModeOf(i);           // FOLLOW 0=OFF 1=ON 2=FREEZE
-    b[259 + i] = seqGenFillOf(i);             // GNR8 fill %
-    b[275 + i] = seqGenAccOf(i);              // GNR8 accent %
-    b[291 + i] = seqGenGlideOf(i);            // GNR8 glide %
-    b[307 + i] = seqGenTieOf(i);              // GNR8 tie %
-    b[323 + i] = seqGenTonesOf(i);            // GNR8 tones 0..3
-    b[339 + i] = seqGenLowOf(i);              // GNR8 low note 0..2
-    b[355 + i] = seqGenRangeOf(i);            // GNR8 range 1..5 octaves
-    b[371 + i] = seqGenAlgoOf(i);             // GNR8 classic/euclid
+    b[259 + i] = seqGenFillOf(i);             // BASS fill %
+    b[275 + i] = seqGenAccOf(i);              // BASS accent %
+    b[291 + i] = seqGenGlideOf(i);            // BASS glide %
+    b[307 + i] = seqGenTieOf(i);              // BASS tie %
+    b[323 + i] = seqGenTonesOf(i);            // BASS tones 0..3
+    b[339 + i] = seqGenLowOf(i);              // BASS low note 0..2
+    b[355 + i] = seqGenRangeOf(i);            // BASS range 1..5 octaves
+    b[371 + i] = seqGenAlgoOf(i);             // BASS classic/euclid
     b[387 + i] = seqLeadContourOf(i);         // LEAD contour 0..2 (ARCH/DESC/WALK)
     b[403 + i] = seqCompHitsOf(i);            // COMP stabs per POLY STEP (0..8)
     b[419 + i] = (uint8_t)seqTransM[i];      // TRANS offset -12..+12 (int8)
@@ -5467,7 +5467,7 @@ void seqCfgLoad() {
     chanLinkBootApply();               // a default LOCKED link still needs the
     return;                            // hub channel before setup() goes live
   }
-  bool extG = (len >= SEQ_EE_LEN_GNR8);   // GNR8 params present
+  bool extG = (len >= SEQ_EE_LEN_GNR8);   // BASS params present
   bool extL = (len >= SEQ_EE_LEN_LEAD);   // LEAD contour present
   bool extC = (len >= SEQ_EE_LEN_COMP);   // COMP hits present
   bool extT = (len >= SEQ_EE_LEN_TRANS);  // TRANS offset present
@@ -5529,7 +5529,7 @@ void seqCfgLoad() {
     chanEncLinkSet(b[564] != 2);         // an explicit 2 (free) is honour-
     chanKeyLinkSet(b[565] != 2);         // ed; 0 = pre-default-flip save
   }
-  seqMapSet(b[2]);                       // GNR8/LEAD mapping (bad -> NEAR)
+  seqMapSet(b[2]);                       // BASS/LEAD mapping (bad -> NEAR)
   if (extA) {                            // ARP F sub-page params (1262)
     for (uint8_t i = 0; i < SEQ_CH_COUNT; i++)
       for (uint8_t p = 0; p < ARP_P_COUNT; p++)
@@ -5558,7 +5558,7 @@ void seqCfgLoad() {
     for (uint8_t i = 0; i < SEQ_CH_COUNT; i++)
       seqPadModeSetOf(i, b[1380 + i]);   // blocks keep LIVE (the default)
   }
-  if (extG) {                            // GNR8 params (new-format block;
+  if (extG) {                            // BASS params (new-format block;
     for (uint8_t i = 0; i < SEQ_CH_COUNT; i++) {   // legacy blocks keep the
       seqGenFillSet(i, b[259 + i]);                 // defaults above)
       seqGenAccSet(i, b[275 + i]);

@@ -25,7 +25,7 @@ If a recipe assumes a page you have never opened, read the first two sections of
 
 | Recipe | Result | Level |
 |---|---|---|
-| [Generate a bassline under a progression](bassline-from-progression.md) | GNR8 bass that follows the chord | intermediate |
+| [Generate a bassline under a progression](bassline-from-progression.md) | Bassline that follows the chord | intermediate |
 | [The full chain: bass → HARM → chords → LEAD](harmony-chain.md) | Four tracks that harmonise each other live | advanced |
 | [Live arpeggio from your DAW](live-arp-from-daw.md) | Hold a chord in the DAW, hear an arpeggio from the device | intermediate |
 

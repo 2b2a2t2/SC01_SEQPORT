@@ -334,7 +334,7 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
       }
     }
     }
-    // GNR8 mod pages (F2/F3/F4): the step armed for the dial breathes
+    // BASS mod pages (F2/F3/F4): the step armed for the dial breathes
     // violet - the playhead above still wins so the head stays readable
     // (the page's own 30 ms refresh loop drives the pulse)
     if (genPageActive() && genOptionSel() >= 1 && genOptionSel() <= 3 &&
@@ -358,7 +358,7 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
       }
     }
     // SKANK lock hold (POLY+SKANK + hold step): the step being locked
-    // breathes violet, same gesture as the GNR8 armed dial (the playhead
+    // breathes violet, same gesture as the BASS armed dial (the playhead
     // above still wins so the head stays readable; the lock row's own
     // 30 ms refresh loop drives the pulse)
     if (currentBinding().enc == ENC_SEQ_SKANK_STEP &&
@@ -607,7 +607,7 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
   // their mode visible at all times; POLY lights F1-F4 too (FX/TYPE/ACC/
   // PROB) - bright white = the target the pads currently edit (M1 while no
   // attribute is selected), dim dark blue background otherwise.  The M2
-  // ARP/GNR8 pages are part of the same radio on MONO tracks: open, they
+  // ARP/BASS pages are part of the same radio on MONO tracks: open, they
   // drop the edit selection (and dim M1), an armed target drops the page.
   //  Touch wins over everything
   bool seqMonoRadio = (modeBase == MODE_SEQ && modeVariant != 3 &&
@@ -666,7 +666,7 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
       p.nscale8(sel == 0xFF ? 48 : (armed ? 176 : 32));
       return p;
     }
-    // GNR8 page open: the F row = option radios (F1 = full OPTS page,
+    // BASS page open: the F row = option radios (F1 = full OPTS page,
     // F2 = OCT/MAP, F3 = BRW, F4 = PROB) - dim TRACK COLOR marks the
     // borrowed row (no target blink, no chain mask), the ARMED radio
     // burns bright so the sub-page it owns is visible
@@ -689,7 +689,7 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
     // which F pad carries the selected target (MONO: F1-F4 = targets 1-4;
     // DRUM: F2 = RATCHET (8), F3/F4 = 3/4; POLY: F1 = FX (5), F2 = TYPE (6),
     // F3/F4 = 3/4).
-    // M1 is white only while it owns the radio: with the M2 ARP/GNR8 page
+    // M1 is white only while it owns the radio: with the M2 ARP/BASS page
     // open the keys are one radio, so M1 dims like every unselected member
     uint8_t sel = stepEditSel();
     uint8_t wantF = 0;
@@ -975,7 +975,7 @@ void pollModeLeds() {
     refreshAllLeds();
   }
 
-  // M2 GNR8-page pulse: same breathing purple for the generator page
+  // M2 BASS-page pulse: same breathing purple for the generator page
   // (and it keeps the M3 hue cycle moving while the page is open)
   static bool genActive = false;
   static unsigned long genFlip = 0;
@@ -990,7 +990,7 @@ void pollModeLeds() {
   }
 
   // M2 LEAD-page pulse: same breathing sea green + M3 hue cycle while the
-  // LEAD generator page is open (mirrors the GNR8 pulse driver)
+  // LEAD generator page is open (mirrors the BASS pulse driver)
   static bool leadActive = false;
   static unsigned long leadFlip = 0;
   bool leadNow = leadPageActive();
@@ -1004,7 +1004,7 @@ void pollModeLeds() {
   }
 
   // M2 HARM-page pulse: breathing teal + M3 hue cycle while the HARM
-  // generator page is open (mirrors the GNR8/LEAD pulse drivers)
+  // generator page is open (mirrors the BASS/LEAD pulse drivers)
   static bool harmActive = false;
   static unsigned long harmFlip = 0;
   bool harmNow = harmPageActive();
@@ -1325,9 +1325,10 @@ void modeOnEvent(uint8_t pad, uint8_t ev) {
   abltSet(false);           // ...and neither does the NEXT Ableton overlay
   encMuteHold(false);       // the M2 mute overlay never outlives the ENC mode
   drumMuteHold(false);      // nor the M1 drum-voice mute overlay
+  ccCfgDismiss();           // nor the PREV CC CONFIG page
   arpPageDismiss();         // nor the M2 arp encoder page
   strumFRowDismiss();       // nor the M2 strum ADDS row
-  genPageDismiss();         // nor the M2 GNR8 encoder page
+  genPageDismiss();         // nor the M2 BASS encoder page
   k4TonalityDismiss();      // nor the KEYMODE4 tonality menu
   stepChainDisarm();        // ...nor an armed attribute chain span
 

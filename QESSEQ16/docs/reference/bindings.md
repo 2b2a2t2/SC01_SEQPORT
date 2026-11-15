@@ -62,7 +62,7 @@ selected track's 16 clip slots, or the 16 tracks with `PREV` held). Its knobs se
 **CC 64–71**, not the base set's CC 17–20 / CC 1–36, so the ENCMODE dials and their
 per-CC-per-channel memory are untouched.
 
-Page rows (ARP sub-pages, GNR8 option radios, the strum ADDS row, the DRUM knob sets,
+Page rows (ARP sub-pages, BASS option radios, the strum ADDS row, the DRUM knob sets,
 COMP/HARM/SKANK/LEAD pages) are themselves overlays: they take the whole encoder row while
 armed, and return the base row when released or when the page closes. Their knobs are
 documented on each page — see [Generators](../generators/arp.md).
@@ -76,7 +76,7 @@ documented on each page — see [Generators](../generators/arp.md).
 | **SEQ 3, bar row** | `C–F` pick the 16-step edit window; pressing the selected bar again toggles its loop |
 | **SEQ 3, black keys** | Track verbs: `C#` length ÷2, `D#` length ×2, `F#` copy, `A#` paste, `G#` bar follow |
 | **SEQ, DRUM track, `M1` held** | Orange part-select overlay; a pad picks the drum part, the normal view then toggles it |
-| **SEQ, page open** | Belong to the page (step pick for GNR8 mod pages, focus in KEY 4) |
+| **SEQ, page open** | Belong to the page (step pick for BASS mod pages, focus in KEY 4) |
 | **ENC 3** | Channel overlay (momentary, yellow) |
 | **ENC 4** | Locked channel picker: 16 pads = the encoder's 16 MIDI channels |
 

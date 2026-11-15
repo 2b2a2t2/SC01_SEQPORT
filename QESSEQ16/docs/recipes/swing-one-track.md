@@ -26,7 +26,7 @@ swing; the style caps how far the swing can shove the off-beat.
 
 ## Traps
 
-- The swing row only lives on the **plain** track view. An open page (GNR8, ARP, DRUM…)
+- The swing row only lives on the **plain** track view. An open page (BASS, ARP, DRUM…)
   owns those slots, so close the page first.
 - Swung steps are **deferred**, not shifted: the on-steps stay on the grid. The queue is
   cleared on transport start/stop, so a swung track never leaks a stray step into a fresh

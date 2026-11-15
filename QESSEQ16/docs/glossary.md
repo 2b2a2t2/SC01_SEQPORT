@@ -42,7 +42,7 @@ release. There is exactly **one overlay slot per group**, so an overlay cannot s
 overlay.
 
 **Page** — an encoder page owned by a track type, opened with **M2** and identified by the
-pad's hue: GNR8 on a bass track, LEAD on a lead track, COMP on POLY/STEP, and so on.
+pad's hue: BASS on a bass track, LEAD on a lead track, COMP on POLY/STEP, and so on.
 
 **Radio** — a set of options where exactly one is armed and arming one takes over the
 whole row. The step-edit radio (TIE / GLIDE / ACCENT / PROB) and the F row are radios.
@@ -195,7 +195,7 @@ print the MIDI control-change number itself.
 | `VAR` | variation — the bar-end fill (`off` / `fill4` / `fill8`) |
 | `FILL` | fill amount |
 
-**GNR8 and ARP pages**
+**BASS and ARP pages**
 
 | Code | In words |
 |---|---|

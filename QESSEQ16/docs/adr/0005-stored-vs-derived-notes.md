@@ -29,6 +29,6 @@ feeder's note for the current tick.
   the send, must not stop the internal engine. A muted track keeps feeding.
 - "Stored" and "derived" have to be documented per track type, because the pads always show
   the stored pattern, not what is sounding (HARM's live follow is the clearest case).
-- Derived values that a player wants to keep per step (GNR8's OCT / BRW / PROB, SKANK's
+- Derived values that a player wants to keep per step (BASS's OCT / BRW / PROB, SKANK's
   locks) had to become step fields — RAM only, like the rest of the step.
 - Undo does not need to know about derivation: there is nothing written to undo.

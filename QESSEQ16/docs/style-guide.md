@@ -5,7 +5,7 @@ the failure mode being replaced is one 103,000-character page with no way in.
 
 ## Shape of a page
 
-1. **H1** — the thing, not the category: `GNR8 Generator (MONO, TYPE = BASS)`.
+1. **H1** — the thing, not the category: `BASS Generator (MONO, TYPE = BASS)`.
 2. **One orientation sentence** — what this page covers, who it is for.
 3. **Body** — explanation, then tables for anything with values.
 4. **`Where to go next`** — two or three links, never a wall of them.

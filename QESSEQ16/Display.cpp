@@ -9,7 +9,7 @@
 #include "Keyboard.h"
 #include "Events.h"
 #include "Chords.h"
-#include "Gen.h"         // GNR8 page values (fill/acc/glide/tie)
+#include "Gen.h"         // BASS page values (fill/acc/glide/tie)
 #include "Key4.h"       // KEYMODE4 genre/knob values + control legend
 #include "Skank.h"      // SKANK page: shape name (LIN/PP/RND)
 #include "Drum.h"       // DRUM page: genre/var/lane values
@@ -75,7 +75,7 @@ static const char* ctrlLegend(uint8_t i) {
       static const char* ar[4] = { "ORD", "MOT", "GEN", "OPT" };
       return ar[i - 5];
     }
-    // SEQMODE + GNR8 page (open with M2 on a MONO BASS track): F1 = the
+    // SEQMODE + BASS page (open with M2 on a MONO BASS track): F1 = the
     // full OPTS page, F2 = per-step OCT + MAP, F3 = per-step BRW,
     // F4 = per-step MOD PROB - wins over the step-edit legend
     if (genPageActive()) {
@@ -138,7 +138,7 @@ static const char* ctrlLegend(uint8_t i) {
   if (i == 3) {
     // hold M2 = ENCMODE channel mute; SEQMODE3 click = erase the track;
     // SEQMODE 1/2/4 + MONO/ARP = the ARP encoder page, + MONO/BASS = the
-    // GNR8 page (all keep priority over the quality key, same as the handler)
+    // BASS page (all keep priority over the quality key, same as the handler)
     if (modeBase == MODE_ENC) return "MUTE";
     if (modeBase == MODE_SEQ && modeVariant == 3) return "ERASE";
     if (modeBase == MODE_SEQ && modeVariant != 3 &&
@@ -146,7 +146,7 @@ static const char* ctrlLegend(uint8_t i) {
       return "ARP";
     if (modeBase == MODE_SEQ && modeVariant != 3 &&
         seqTrack() == SEQ_TRACK_MONO && seqMonoType() == SEQ_MONO_BASS)
-      return "GNR8";
+      return "BASS";
     if (modeBase == MODE_SEQ && modeVariant != 3 &&
         seqTrack() == SEQ_TRACK_MONO && seqMonoType() == SEQ_MONO_LEAD)
       return "LEAD";
@@ -154,7 +154,7 @@ static const char* ctrlLegend(uint8_t i) {
     return key2 ? "Min" : "M2";
   }
   if (i == 4) {
-    // GNR8/LEAD track: M3 = generate (tap) / undo (hold), like KEYMODE4 APPLY
+    // BASS/LEAD track: M3 = generate (tap) / undo (hold), like KEYMODE4 APPLY
     if (modeBase == MODE_SEQ && modeVariant != 3 &&
         seqTrack() == SEQ_TRACK_MONO &&
         (seqMonoType() == SEQ_MONO_BASS || seqMonoType() == SEQ_MONO_LEAD))
@@ -164,6 +164,10 @@ static const char* ctrlLegend(uint8_t i) {
     if (key4) return "APPLY";
     return key2 ? "Dim" : "M3";
   }
+  // ENCMODE: PREV is the CC CONFIG page key (the family's other keys are
+  // already named on the row: NEXT = Live, M1 = drum voices, M2 = mute,
+  // M3 = page group, F1..F4 = the CC banks)
+  if (modeBase == MODE_ENC && modeVariant != 3) return "CONFIG";
   return "PREV";
 }
 
@@ -171,7 +175,7 @@ static const char* ctrlLegend(uint8_t i) {
 //
 // The strip used to name the buttons and nothing else, so an open page or an
 // armed radio was visible only on the pads.  The band can say it too: the
-// chosen F1..F4 (the ENC CC bank, an ARP/GNR8 option, the step-edit attribute,
+// chosen F1..F4 (the ENC CC bank, an ARP/BASS option, the step-edit attribute,
 // the open TONALITY bank) and the M button whose menu is open are filled.
 // This reads the same state Modes.cpp lights the pads from, so the two agree.
 static void writeLegends() {
@@ -287,6 +291,28 @@ void refreshMainScreen() {
     return;
   }
 
+  // ENCMODE + PREV: the CC CONFIG page.  The dials fit the CC number only as a
+  // 4x6 caption in the ring's bottom notch; this page spends the whole grid on
+  // it - one cell per knob, the encoder above and the CC it sends below, in the
+  // same face as every other value.  The numbers come from encCcNum(), so the
+  // F1..F4 bank and the M3 page group move what the page prints
+  if (ccCfgActive()) {
+    char ccTxt[8];
+    char encTxt[8];
+    for (uint8_t c = 0; c < 4; c++) {
+      snprintf(encTxt, sizeof(encTxt), "ENC%u", (unsigned)(c + 1));
+      snprintf(ccTxt, sizeof(ccTxt), "CC%u", encCcNum(c));
+      scrCellLabel(c, encTxt);
+      scrCellValue(c, ccTxt);
+      snprintf(encTxt, sizeof(encTxt), "ENC%u", (unsigned)(c + 5));
+      snprintf(ccTxt, sizeof(ccTxt), "CC%u", encCcNum((uint8_t)(4 + c)));
+      scrCellLabel((uint8_t)(4 + c), encTxt);
+      scrCellValue((uint8_t)(4 + c), ccTxt);
+    }
+    writeLegends();
+    return;
+  }
+
   // ENCMODE (every variant but the channel picker, which keeps its own
   // screen): one CC knob per cell - a 270-degree ring open at 6 o'clock, a
   // pointer across the rim and the value inside it, with the CC number in the
@@ -317,7 +343,7 @@ void refreshMainScreen() {
   // other four keep their knobs (ENC1 octave, 5/6/8 gate/vel/prob)
   bool arpP = arpPageActive();
   uint8_t arpSeq = (uint8_t)(seqEditChannel() - 1);
-  // SEQMODE + M2 GNR8 page: ENC2/3/4/7 take fill/accent/glide/tie, the
+  // SEQMODE + M2 BASS page: ENC2/3/4/7 take fill/accent/glide/tie, the
   // other four keep their knobs (ENC1 octave, 5/6/8 gate/vel/prob)
   bool genP = genPageActive();
   uint8_t genSeq = (uint8_t)(seqEditChannel() - 1);
@@ -342,7 +368,7 @@ void refreshMainScreen() {
   // (encoders 1..6 override that step's knob, 8 = TRANS)
   bool skankStepOv = (b.enc == ENC_SEQ_SKANK_STEP);
   // ...and with PREV held the SHIFT/TRANS row takes the encoders (ENC1 =
-  // rotate, ENC2 = semitone transpose).  The GNR8 page reuses this same
+  // rotate, ENC2 = semitone transpose).  The BASS page reuses this same
   // overlay, so the rotate value below still applies there
   bool genOv = (b.enc == ENC_SEQ_ROT_OV);
   // ...or a held step in SEQMODE (non-DRUM) arms the per-step TRANS overlay
@@ -362,7 +388,7 @@ void refreshMainScreen() {
                     seqTrack() != SEQ_TRACK_MONO && stepEditIsOn());
   // ENC7 = ACCENT velocity (all track types) in SEQMODE: the label/value
   // below only apply while nothing else owns that slot - the M2 pages
-  // binding ENC7 (ARP INSERT, GNR8 TIE, LEAD DENS, SKANK TES%), the DRUM
+  // binding ENC7 (ARP INSERT, BASS TIE, LEAD DENS, SKANK TES%), the DRUM
   // page (lane lines) and any SEQ overlay (their rows win later in the
   // chain anyway); the POLY step-edit exclusion lives in seqAccentEncCtx
   bool acc7 = seqAccentEncCtx() && !arpP && !genP && !leadP && !skankP &&
@@ -939,6 +965,8 @@ void drawHeaderText() {
   }
   if (settingsOpen()) {
     left = "DEVICE SETTINGS";    // the header tap opened the settings page
+  } else if (ccCfgActive()) {
+    left = "CC CONFIG";          // PREV in ENCMODE: what each knob sends
   } else if (drumPageActive()) {
     left = "DRUM PATTERN";       // the drum pattern page owns the row
   } else if (genPageActive()) {

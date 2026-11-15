@@ -235,7 +235,7 @@ The bottom band named the controls but never said which one was in use: an
 open M2 page, or which of F1..F4 the row was on, showed only on the pads (a
 chosen F pad burns white in `Modes.cpp`). The band now fills the armed label -
 accent fill, dark text, the same treatment the mode row gives the active mode -
-for the F radio of the open screen (the ENC5..8 CC bank, an ARP or GNR8 option,
+for the F radio of the open screen (the ENC5..8 CC bank, an ARP or BASS option,
 the step-edit attribute, the open TONALITY bank) and for the M button whose
 menu is open (SEQMODE's M2 track page, KEYMODE4's M2 TONALITY menu and its M1
 write state).
@@ -271,7 +271,7 @@ variation / line, swing style.
 Widths that scale with a long range were left at 4 counts, since they were
 not part of the report and a 65-value pattern length at 8 values per turn
 would be painful: pattern length, tempo, velocity, track / mono / poly type,
-the ARP lists, EXT IN / source and the GNR8 modifier amounts.
+the ARP lists, EXT IN / source and the BASS modifier amounts.
 
 Tuning: `ENC_STEP_COUNTS` in `Encoders.cpp` is the only number to change -
 raise it if a list still feels twitchy, lower it if a sweep feels slow.

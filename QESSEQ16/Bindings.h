@@ -12,7 +12,7 @@ enum EncSet : uint8_t {
   ENC_KEY, ENC_KEY2, ENC_KEY3, ENC_KEY4,
   ENC_SEQ_STEP_HELD,           // overlay: step held in SEQMODE
   ENC_SEQ_ROT_OV,              // overlay: PREV held on a SEQ page (SHIFT/TRANS;
-                               //   GNR8 page reuses it - ROT on ENC1 there)
+                               //   BASS page reuses it - ROT on ENC1 there)
   ENC_SEQ_STEPOV,              // overlay: step held in SEQMODE (per-step TRANS)
   ENC_SEQ_SKANK_STEP,           // overlay: step held on a POLY+SKANK track
                                //   (per-step derivation locks, ENC8 = TRANS)

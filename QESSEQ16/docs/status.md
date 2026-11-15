@@ -49,7 +49,7 @@ A blank means the feature predates the initial import or cannot be attributed to
 | Feature | Mode | Status | Since | Notes |
 |---|---|---|---|---|
 | ARP + four sub-pages (order, motion, generative, options) | SEQ, MONO/ARP | Stable | 2026-10-04 | Sub-pages 2026-10-26; 20 per-track values, persisted |
-| GNR8 bassline generator | SEQ, MONO/BASS | Stable | 2026-10-09 | Per-step OCT/BRW/PROB are RAM only |
+| Bassline generator (BASS page) | SEQ, MONO/BASS | Stable | 2026-10-09 | Per-step OCT/BRW/PROB are RAM only |
 | LEAD melody generator with live contour flip | SEQ, MONO/LEAD | Stable | 2026-10-21 | Per-contour cache is session RAM |
 | COMP chord stabs | SEQ, POLY/STEP | Stable | 2026-10-22 | ENC2–4 reserved |
 | HARM progression inference (Viterbi over genres) | SEQ, POLY/HARM | Stable | 2026-10-20 | Re-bakes when the feeder changes |

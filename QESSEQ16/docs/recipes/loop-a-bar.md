@@ -28,7 +28,7 @@ position kept advancing while you were looping.
 
 ## Variations
 
-- **Copy/paste is the whole step table**: notes, attributes, FX, GNR8 modifiers, strum
+- **Copy/paste is the whole step table**: notes, attributes, FX, BASS modifiers, strum
   onsets, drum masks, SKANK locks, plus length and speed. The destination keeps its *sound*
   (kit, FILL/MOT, genre, swing), so the same phrase plays on a different instrument.
 - Paste claims the one-level undo slot — **M3 hold** brings the replaced pattern back.

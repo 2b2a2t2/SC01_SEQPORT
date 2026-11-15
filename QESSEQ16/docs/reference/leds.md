@@ -17,7 +17,7 @@ SEQMODE **M2** opens an encoder page on a track that has one, and the pad carrie
 |---|---|---|
 | **DRUM** | indigo `120,0,255` | [DRUM pattern page](../generators/drum-styles.md) |
 | **MONO + ARP** | pink `255,0,170` | [ARP options](../generators/arp.md) |
-| **MONO + BASS** | blue `0,70,200` | [GNR8 generator](../generators/gnr8.md) |
+| **MONO + BASS** | blue `0,70,200` | [BASS generator](../generators/bass.md) |
 | **MONO + LEAD** | sea green `46,120,80` | [LEAD generator](../generators/lead.md) |
 | **POLY + STRUM/HAND** | lavender `205,135,255` | the strum ADDS row |
 | **POLY + HARM** | aqua `0,215,215` | [HARM page](../generators/harm.md) |
@@ -27,6 +27,6 @@ SEQMODE **M2** opens an encoder page on a track that has one, and the pad carrie
 
 **Red, orange and yellow are reserved** — REC, the drum / encoder MUTE overlays, the variant-3 channel selector and the armed-attribute step pulse already use them — and the step-edit attribute row keeps its **blue** (TIE / GLIDE / ACCENT / PROB). Every track hue therefore lives in the cool arc from spring green through cyan and blue to indigo and pink; two **pale tints** (STRUM lavender, COMP pale sky) buy their separation by lightness instead of hue.
 
-When an M2 page is open, **its F row wears the same hue as the pad** that opened it (ARP sub-pages, GNR8 option radios, the strum ADDS row, the drum knob sets) — bright for the armed entry, dim for the rest. F pads that a page does not own keep their step-edit blue.
+When an M2 page is open, **its F row wears the same hue as the pad** that opened it (ARP sub-pages, BASS option radios, the strum ADDS row, the drum knob sets) — bright for the armed entry, dim for the rest. F pads that a page does not own keep their step-edit blue.
 
 Idle brightness is 64/255 (breathing 64→200); the closest pair in CIELAB at that level is **14.4 ΔE** (HARM aqua vs SKANK spring green), against 0.0 for the duplicates and 8.9 for indigo vs blue before the split.

@@ -18,7 +18,7 @@ MONO/LEAD. Set types on `SEQUENCER 3` (`ENC6 = TRACK`, `ENC7 = TYPE`).
 4. **Melody.** On the MONO/LEAD track, `ENC5 = INCH` to the HARM track, **ENC3 = FOLLOW**
    on. Press **M2** (sea green), set **ENC2 = CONTOUR**, **ENC5 = CT** (chord-tone vs scale
    blend), **ENC6 = GD** (guide-tone depth), then **M3** to generate the skeleton.
-5. **MAP.** On the bass track's GNR8 page, **F2 → ENC3 = `ct`** (chord tone whose octave
+5. **MAP.** On the BASS page of the bass track, **F2 → ENC3 = `ct`** (chord tone whose octave
    follows the contour) or `gd` (3rd/7th only). MAP is global: one setting serves the chain.
 6. Play a different bass note or regenerate the bass. The HARM track re-bakes before the
    next draw, and the LEAD track re-resolves onto the new chord.
@@ -46,4 +46,4 @@ one before it.
 - Erasing the feeder leaves a baked HARM pattern alone (M3 re-derives manually).
 
 See [HARM](../generators/harm.md), [LEAD](../generators/lead.md),
-[GNR8](../generators/gnr8.md) and [Concepts](../concepts.md).
+[BASS](../generators/bass.md) and [Concepts](../concepts.md).

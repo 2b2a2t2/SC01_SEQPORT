@@ -44,6 +44,10 @@ stamps that count on the step's **selected drum part**; only that part re-trigge
 `ENC 5–8` in ENCMODE print the live CC number of the armed bank: `CC1–CC4` in page group 1,
 `CC21–CC24` in group 2.
 
+The ENCMODE CC map itself is editable in **`CcConfig.h`** — four fixed CCs for `ENC1–4` plus a
+4×4 block per page group for `ENC5–8`, defaults `CC17–CC20` / `CC1–CC16` / `CC21–CC36`. Every
+number must stay in CC 1–36 (the size of the per-CC-per-channel value store).
+
 ### Rows that appear while something is held or armed
 
 | Situation | ENC1–8 |
@@ -70,16 +74,20 @@ stamps that count on the step's **selected drum part**; only that part re-trigge
 | Tap an **F** | Arm that sub-page; the whole encoder row becomes its knobs |
 | Tap the armed F again | Release, back to the plain row |
 | Tap **M1** | Step-edit radio (targets TIE / GLIDE / ACCENT / PROB — DRUM adds RATCHET on **F2**, POLY adds FX / TYPE — and lets ENC2–4 turn `LISTEN` / `PLAY` / `OVERDUB`) |
-| Tap **M2** | The track-type page (GNR8, LEAD, ARP, COMP, HARM, SKANK, DRUM styles, strum ADDS) |
+| Tap **M2** | The track-type page (BASS, LEAD, ARP, COMP, HARM, SKANK, DRUM styles, strum ADDS) |
 | Hold **M2** | Overdub-layer panel on the keyboard row: C D E F = layers 1–4, C# = mute (always armed) / D# = erase (white key confirms), F# / G# / A# = undo / redo / reset layers |
 | Tap **M3** | Generate (page open) / re-roll (drum page) / page group (ENCMODE) |
 | Hold **M3** | Undo one level (generators, drum page) |
 | Hold **PREV** | Swap the encoder row to SHIFT / TRANS |
+| Tap **PREV** in ENCMODE | `CC CONFIG` page: the eight knobs' CC numbers, live with the F bank and M3 group |
 | Hold **M1** on a DRUM track | Orange part-select overlay |
 | **REC** in SEQ 4 / ENC 4 | Save per-channel memory / all CC values to EEPROM |
 
 M1 and M2 are **mutually exclusive**: opening a page turns the edit radio off, and
-pressing M1 from the page closes it.
+pressing M1 from the page closes it — on every track type (DRUM PATTERN included);
+arming an F1–F4 target closes an open page the same way. The rule runs both ways:
+**leaving a page with its own M2 press, or changing `TRACK` / `TYPE`, lands back on
+step edit** (radio on, M1 STEPS) — the same as choosing a channel.
 
 ## ENCABLETONMODE (NEXT, inside ENCMODE)
 
@@ -113,11 +121,11 @@ that. Small enums move **1 step per detent**. **Nothing wraps** — dials stop a
 | Orange | DRUM part overlay |
 | White / red | KEY 4 focus, AUDITION / WRITE |
 | Amber | KEY 4 locked step (bright = both) |
-| Violet | HAND option on, or a picked GNR8 step |
+| Violet | HAND option on, or a step picked on the BASS page |
 | White (touch) | Pad is being touched — wins over everything |
 
 Page hues (dim = page closed, breathing = open): **indigo** DRUM · **pink** ARP ·
-**blue** GNR8 · **sea green** LEAD · **lavender** strum · **aqua** HARM ·
+**blue** BASS · **sea green** LEAD · **lavender** strum · **aqua** HARM ·
 **pale sky** COMP (lit only while open) · **spring green** SKANK.
 Red, orange and yellow are reserved; do not expect a track hue there.
 
@@ -136,7 +144,7 @@ A message too wide is pinned to the left edge rather than running off-screen.
 3. **Patterns are RAM only** — rotate, undo and generate all touch `seqNotes`, never EEPROM.
 4. **`SEQ 4 → SRC`** decides which port external notes are accepted from; USB only by default.
 5. **DIN carries notes only** — no clock, no transport.
-6. **Per-step GNR8 modifiers (OCT / BRW / PROB) are RAM only**, unlike the eight page knobs.
+6. **Per-step BASS modifiers (OCT / BRW / PROB) are RAM only**, unlike the eight page knobs.
 7. **An armed page dies with the page** — changing channel, TRACK, TYPE or mode resets it.
 8. **Older EEPROM saves load with defaults**, they are not rejected (except ENCMODE4).
 9. **USB Type is MIDI**, so there is no serial tty — the board only appears as a Teensy port.

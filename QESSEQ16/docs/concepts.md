@@ -55,7 +55,7 @@ listeners.
 
 | Tier | What | Why |
 |---|---|---|
-| **Step content** | Notes, TIE/GLIDE/ACCENT/PROB, GNR8 OCT/BRW/PROB, SKANK locks | It is the music; it moves with rotate and dies with the step |
+| **Step content** | Notes, TIE/GLIDE/ACCENT/PROB, BASS OCT/BRW/PROB, SKANK locks | It is the music; it moves with rotate and dies with the step |
 | **Track settings** | Length, follow, input channel, type, generator knobs | You want them back after a power cycle |
 | **Global** | Key, scale, BPM, swing, accent velocity, chord settings | They belong to the instrument, not to a pattern |
 
