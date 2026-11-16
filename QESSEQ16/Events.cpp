@@ -2508,6 +2508,23 @@ void handleEncoderEvents() {
       any = true;
     }
 
+    // KEYMODE1: ENC4 = Force-to-scale (FScale) - the very switch KEYMODE2
+    // dials on its ENC4 and KEYMODE4 on its PREV row / TONALITY bank, now
+    // reachable from the plain keyboard too: with it ON the sequencer snaps
+    // stored steps to the current scale as it plays them (stored notes stay
+    // raw), so turning ENC2 here recolors recorded progressions live.
+    // No LED pass: FScale changes what SOUNDS, never which pads are lit.
+    // KEYMODE3 keeps ENC4 for its KBOARD link switch and KEYMODE4 for MOTION
+    if (modeBase == MODE_KEY && modeVariant == 1 && ei == 3 && ed != 0) {
+      chordFScaleAdjust(ed);
+      headerAnnounce("Force To Scale", chordFScale() ? "on" : "off");
+      if (logRoom(48)) {
+        Serial.print("  fscale ");
+        Serial.println(chordFScale() ? "ON" : "OFF");
+      }
+      any = true;
+    }
+
     // KEYMODE4 + step held: the overlay row edits THAT step - ENC1 OCT
     // (playback transpose, BASS's -2..+2 stored separately), ENC2 DEG
     // (shift every tone one scale degree in the key), ENC3 INV (cycle the

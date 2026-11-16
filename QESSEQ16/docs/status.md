@@ -24,7 +24,7 @@ A blank means the feature predates the initial import or cannot be attributed to
 | Chromatic pads, in-scale LEDs, octave/scale/key | KEY 1 | Stable | 2026-09-25 | MIDI 24 = C0; pads outside the scale stay dark |
 | Drum-track pad row | KEY 1, DRUM | Stable | 2026-11-04 | One dim orange-red row, no scale/key/chord engine; defaults to octave 1 (the kit) and a pad press picks that drum voice for the step edit |
 | Chord engine, bass, spread, density, latch | KEY 2 | Stable | 2026-09-26 | 8-note maximum |
-| Force-to-scale on inbound notes | KEY 2 | Stable | 2026-09-28 | `FScale` |
+| Force-to-scale on inbound notes | KEY 1, 2, 4 | Stable | 2026-09-28 | `FScale` — always dialled on KEY 2 `ENC4` and KEY 4 `PREV` / TONALITY bank 1, on KEY 1 `ENC4` since 2026-11-16; ON also snaps the sequencer's stored steps into the scale at playback |
 | Channel select + ENCOD/KBOARD links | KEY 3 | Stable | 2026-09-30 | Momentary; restores the previous base and variant; both links boot **locked** |
 | Progression engine, 18 genres | KEY 4 | **Beta** | 2026-10-06 | The progression itself is not persisted — it is rebuilt from the knobs; phrase templates (on the encoder row as `ENC7`; `ERA` moved to the EMB page) and the cadence band selector are new — compiled, not yet auditioned on hardware |
 

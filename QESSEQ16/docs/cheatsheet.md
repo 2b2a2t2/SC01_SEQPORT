@@ -32,7 +32,7 @@ alive under its page or radio).
 | **SEQ 3** | OCT | LEN | FOLLOW | SPEED | INCH | TRACK | TYPE | BPM |
 | **SEQ 4** | SWING | AMT | EXT IN | SRC | GATE | VEL | ACC | PROB |
 | **ENC 1–4** | CC17 | CC18 | CC19 | CC20 | CC1… | CC2… | CC3… | CC4… |
-| **KEY 1** | OCT | SCALE | KEY | -- | -- | -- | -- | -- |
+| **KEY 1** | OCT | SCALE | KEY | FSCALE | -- | -- | -- | -- |
 | **KEY 2** | OCT | SCALE | KEY | FSCALE | BASS | SPRD | DENS | LATCH |
 | **KEY 3** | OCT | SCALE | ENCOD | KBOARD | -- | -- | -- | -- |
 | **KEY 4** | GENRE | MOOD | TENS | MOTION | CAD | CPX | PHRASE | SURP |

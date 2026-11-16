@@ -6,6 +6,22 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### `FSCALE` on KEYMODE's ENC4
+
+- **KEY 1's ENC4 now dials `FSCALE` (force-to-scale)**: the slot idled at `--`, but the
+  switch it controls was never KEY 2-only — with it **ON** the sequencer snaps every stored
+  step into the current scale **as it plays it** (the stored notes stay raw), so turning
+  `ENC2` (scale) there recolors recorded progressions live; **OFF** plays a recording
+  exactly as stored. It is the *same* global state as KEY 2's `ENC4` and KEY 4's `PREV` row
+  / TONALITY bank 1 (`chordFScale()`), so the knob that was turned last decides, and the
+  value line reads `ON` / `OFF` like the other two.
+- **Nothing else moved**: KEY 3 keeps `ENC4` = `KBOARD` (its channel-link switch) and
+  KEY 4's main row keeps `ENC4` = `MOTION` (`FSCALE` stays on its `PREV` row). No LED pass
+  on the turn — FScale changes what sounds, never which pads are lit — and no settings
+  format change (the switch is RAM-only, as it always was).
+- Docs follow the labels: cheat sheet, bindings reference, keyboard-modes page and the
+  status table.
+
 ### `GATE` / `VEL` on every track type
 
 - **`GATE` (ENC5) and `VEL` (ENC6) now shape DRUM and POLY playback too, not only MONO**: the

@@ -740,6 +740,8 @@ void refreshMainScreen() {
       snprintf(val, sizeof(val), "%s", chordLatch() ? "ON" : "OFF");
     } else if (key2 && c == 3) {
       snprintf(val, sizeof(val), "%s", chordFScale() ? "ON" : "OFF"); // ENC4
+    } else if (modeBase == MODE_KEY && modeVariant == 1 && c == 3) {
+      snprintf(val, sizeof(val), "%s", chordFScale() ? "ON" : "OFF"); // ENC4
     } else if (modeBase == MODE_KEY && modeVariant == 3 && c == 2) {
       snprintf(val, sizeof(val), "%s",      // ENC3 = ENCOD link
                chanEncLocked() ? "locked" : "free");

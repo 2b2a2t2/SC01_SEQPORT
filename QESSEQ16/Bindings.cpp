@@ -43,7 +43,7 @@ static const char* encLabels[ENC_SET_COUNT][8] = {
   /* ENC_ENC2         */ { "CC17", "CC18", "CC19", "CC20", "CC1", "CC2", "CC3", "CC4" },
   /* ENC_ENC3         */ { "CC17", "CC18", "CC19", "CC20", "CC1", "CC2", "CC3", "CC4" },
   /* ENC_ENC4         */ { "CC17", "CC18", "CC19", "CC20", "CC1", "CC2", "CC3", "CC4" },
-  /* ENC_KEY          */ { "OCT", "SCALE", "KEY", "--", "--", "--", "--", "--" },
+  /* ENC_KEY          */ { "OCT", "SCALE", "KEY", "FSCALE", "--", "--", "--", "--" },
   /* ENC_KEY2         */ { "OCT", "SCALE", "KEY", "FSCALE", "BASS", "SPRD", "DENS", "LATCH" },
   /* ENC_KEY3         */ { "OCT", "SCALE", "ENCOD", "KBOARD", "--", "--", "--", "--" },
   /* ENC_KEY4         */ { "GENRE", "MOOD", "TENS", "MOTION", "CAD", "CPX", "PHRASE", "SURP" },

@@ -32,7 +32,7 @@ alive under its page or radio. Every code is expanded in the
 | **ENC 2** | CC17 | CC18 | CC19 | CC20 | CC1 | CC2 | CC3 | CC4 |
 | **ENC 3** | CC17 | CC18 | CC19 | CC20 | CC1 | CC2 | CC3 | CC4 |
 | **ENC 4** | CC17 | CC18 | CC19 | CC20 | CC1 | CC2 | CC3 | CC4 |
-| **KEY 1** | OCT | SCALE | KEY | -- | -- | -- | -- | -- |
+| **KEY 1** | OCT | SCALE | KEY | FSCALE | -- | -- | -- | -- |
 | **KEY 2** | OCT | SCALE | KEY | FSCALE | BASS | SPRD | DENS | LATCH |
 | **KEY 3** | OCT | SCALE | ENCOD | KBOARD | -- | -- | -- | -- |
 | **KEY 4** | GENRE | MOOD | TENS | MOTION | CAD | CPX | PHRASE | SURP |
@@ -84,7 +84,7 @@ documented on each page — see [Generators](../generators/arp.md).
 
 | Mode | Pads 25–41 do |
 |---|---|
-| **KEY 1** | Chromatic keyboard, in-scale pads only; octave/scale/key on the encoders |
+| **KEY 1** | Chromatic keyboard, in-scale pads only; octave/scale/key/force-to-scale on the encoders |
 | **KEY 2** | Chord pads; `M1/M2/M3/NEXT` pick quality, `F1–F4` toggle extensions |
 | **KEY 3** | Channel selector on the step pads; keyboard unchanged |
 | **KEY 4** | Scored degree map: hue by pitch class, brightness by rank, orange = borrowed; press to audition and chain |
