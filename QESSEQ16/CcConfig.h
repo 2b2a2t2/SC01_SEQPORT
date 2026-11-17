@@ -40,15 +40,15 @@ static const uint8_t CC_ENC_FIXED[4] = { 17, 18, 19, 20 };
 //   knob 0..3    = ENC5..ENC8
 static const uint8_t CC_ENC_BANK[2][4][4] = {
   // group 1 (M3 off) - the default CC1..16
-  { {  29,  30,  31,  32 },
+  { {  1,  2,  3,  4 },
     {  5,  6,  7,  8 },
-    {  21, 22, 23, 24 },
-    { 25, 26, 27, 28 } },
-  // group 2 (M3 on) - the default CC21..36 (CC17..20 stay ENC1..ENC4)
-  { { 1, 2, 3, 4 },
-    { 5, 6, 7, 8 },
-    { 9, 10, 11, 12 },
+    {  9, 10, 11, 12 },
     { 13, 14, 15, 16 } },
+  // group 2 (M3 on) - the default CC21..36 (CC17..20 stay ENC1..ENC4)
+  { { 21, 22, 23, 24 },
+    { 25, 26, 27, 28 },
+    { 29, 30, 31, 32 },
+    { 33, 34, 35, 36 } },
 };
 
 // 1..CC_MAP_MAX, or 1 for an entry outside it (never an out-of-bounds store)

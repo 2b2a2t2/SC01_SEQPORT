@@ -283,20 +283,28 @@ bool leadPageActive()  { return leadPageOn && leadTrackCtx(); }
 // --- SEQMODE M2 "HARM" page (variants 1/2/4) --------------------------------
 // Clicking M2 on a POLY+HARM edit track rebinds the encoder row to the
 // harmonizer: ENC1 = GENRE (the harmonic grammar), ENC2 = FILL (density
-// gate of the baked triads), ENC3 = SRC (bass/arp source), ENC4 = HOLD
+// gate of the baked chords), ENC3 = SRC (bass/arp source), ENC4 = HOLD
 // (force hold on a repeated bass).  M3 bakes the progression inferred from
 // the FOLLOW feeder's bassline into the track's steps, M3 hold undoes it.
-// Composite active check like the other pages.
+// While the page is open the F row picks a sub-bank: F1 = the base row
+// above, F2 = the voicing bank (SHAPE / SIZE / VOICE / INV on ENC1..4),
+// F3/F4 reserved.  Composite active check like the other pages.
 static bool harmPageOn = false;
+// armed F sub-bank (0xFF = the base row, 0 = F1 base, 1 = F2 voicing,
+// 2/3 reserved): dies with the page - toggle and dismiss clear it, so a
+// reopen always starts on the plain GENRE/FILL/SRC/HOLD row
+static uint8_t harmSetSel = 0xFF;
 
 static bool harmTrackCtx() {
   return modeBase == MODE_SEQ && modeVariant != 3 &&
          seqTrack() == SEQ_TRACK_POLY && seqPolyType() == SEQ_POLY_HARM;
 }
 
-void harmPageToggle() { harmPageOn = !harmPageOn; }
-void harmPageDismiss() { harmPageOn = false; }
+void harmPageToggle() { harmPageOn = !harmPageOn; harmSetSel = 0xFF; }
+void harmPageDismiss() { harmPageOn = false; harmSetSel = 0xFF; }
 bool harmPageActive()  { return harmPageOn && harmTrackCtx(); }
+uint8_t harmSetSelGet() { return harmPageActive() ? harmSetSel : 0xFF; }
+void harmSetSelSet(uint8_t s) { harmSetSel = (s <= 3) ? s : 0xFF; }
 
 // --- SEQMODE M2 "COMP" page (variants 1/2/4) --------------------------------
 // Clicking M2 on a POLY+STEP edit track rebinds the encoder row to the
@@ -951,11 +959,13 @@ void handleButtonEvents() {
           // never take it - their steps are voice toggles)
           if (modeBase == MODE_SEQ) {
             seqTrStepSel = (int8_t)stp;
-            // a POLY+SKANK track swaps the row onto its LOCK knobs instead
-            // (encoders 1..6 = per-step derivation overrides, 8 = TRANS)
-            bool skankRow = modeVariant != 3 &&
-                            seqTrack() == SEQ_TRACK_POLY &&
-                            seqPolyType() == SEQ_POLY_SKANK;
+            // ...but with the M2 SKANK page OPEN the row swaps onto its
+            // LOCK knobs instead (encoders 1..7 = per-step derivation
+            // overrides, 8 = TRANS).  The page owns those knobs, so the
+            // locks belong to it: with the page closed (edit mode, M1) a
+            // held step takes the plain per-step TRANS row exactly like
+            // every other track
+            bool skankRow = skankPageActive();
             setOverlay(G_ENC, skankRow ? ENC_SEQ_SKANK_STEP
                                        : ENC_SEQ_STEPOV);
             refreshMainScreen();  // the encoder labels are the overlay's
@@ -1194,6 +1204,30 @@ void handleButtonEvents() {
       refreshAllLeds();
       refreshMainScreen();
     } else
+    // HARM page (open via M2): F1 = the base row (GENRE / FILL / SRC /
+    // HOLD), F2 = the voicing bank (SHAPE / SIZE / VOICE / INV on ENC1..4),
+    // F3/F4 reserved.  Clicking the armed one again returns to the base row,
+    // click another to switch - the radio shape the DRUM page has.  The
+    // claim sits BEFORE the step-edit target radio below, so the open page
+    // owns the F row
+    if (ev == EV_CLICKED && harmPageActive() &&
+        kl >= groupControls[5] && kl <= groupControls[8]) {
+      uint8_t idx = (uint8_t)(kl - groupControls[5]);      // 0..3
+      if (idx <= 1) {
+        uint8_t want = (harmSetSelGet() == idx) ? 0xFF : idx;
+        harmSetSelSet(want);
+        headerShow(want == 0xFF || want == 0 ? "HARM" : "Chord Voicing");
+        if (logRoom(48)) {
+          Serial.print("  harm set ");
+          Serial.println(want == 0xFF || want == 0 ? "base" : "voicing");
+        }
+      } else {
+        headerShow("HARM");           // F3/F4 reserved: consumed, no state
+        if (logRoom(48)) Serial.println("  harm set reserved");
+      }
+      refreshAllLeds();
+      refreshMainScreen();
+    } else
     // F1-F4 in SEQMODE (MONO): pick the edit target and switch the radio
     // on (TIE/GLIDE/ACCENT/PROB).  DRUM/POLY tracks only take ACCENT/PROB
     // from F3/F4 - clicking the selected one again closes the radio there;
@@ -1384,6 +1418,35 @@ void handleButtonEvents() {
       if (logRoom(48)) {
         Serial.print("  ableton F");
         Serial.println(fidx + 1);
+      }
+    }
+
+    // ENCMODE4: HOLD an F pad to edit that bank's FLAVOR - how its second row
+    // is drawn, never what it sends.  ENC1 steps the flavor and the row
+    // previews the held bank, so the change is visible under the finger; the
+    // CLICK path below still arms the bank, so a short tap is what it was
+    if (modeBase == MODE_ENC && modeVariant == 4 && !abltOn() &&
+        kl >= groupControls[5] && kl <= groupControls[8] &&
+        (ev == EV_PRESSED || ev == EV_RELEASED)) {
+      const uint8_t b = (uint8_t)(kl - groupControls[5]);
+      encFlavorHold(ev == EV_PRESSED, b);
+      if (ev == EV_PRESSED) {
+        // the bank you are editing becomes the armed one: otherwise the row
+        // falls back to whichever bank was armed before, which draws ITS
+        // flavor - so setting ENVELOPE on F2 while F1 was armed looked like
+        // the flavors reset themselves the moment the pad came up
+        encBankSet(b);
+        char hb[24];
+        snprintf(hb, sizeof(hb), "F%u Flavor %s", (unsigned)(b + 1),
+                 encFlavorName(encFlavorOf(b)));
+        headerShow(hb);
+        refreshAllLeds();
+      }
+      refreshMainScreen();
+      refreshHeader();
+      if (logRoom(48)) {
+        Serial.print("  F flavor ");
+        Serial.println(ev == EV_PRESSED ? "hold" : "release");
       }
     }
 
@@ -2291,6 +2354,63 @@ void ccCfgDismiss() { ccCfgOn = false; }
 bool ccCfgOpen() { return ccCfgOn; }
 bool ccCfgActive() { return ccCfgOn && ccCfgCtx(); }
 
+// ENCMODE4: how the second row is drawn (dials / bars / envelope).  Display
+// only - the CC numbers, the values and the MIDI send are untouched, which is
+// why this is RAM state and nothing else: a power cycle draws dials again,
+// exactly like the F bank reset does.
+//
+// One flavor PER F BANK, and the row draws the ARMED bank's - so wherever the
+// armed bank comes back from (a mode round trip recalls it through
+// encBankMem), the row shows the flavor that bank was given.  Which is why the
+// bank being edited is armed as soon as the FLAVOR menu opens (see the F hold
+// handler and encFlavorStep): otherwise the flavor lands on one bank and the
+// row keeps drawing another bank's DIALS
+static uint8_t encFlavorMem[4] = { ENC_FLAVOR_DIALS, ENC_FLAVOR_DIALS,
+                                   ENC_FLAVOR_DIALS, ENC_FLAVOR_DIALS };
+static uint8_t flavorHeldBank = 0xFF;   // 0..3 while an F pad is held
+
+uint8_t encFlavorOf(uint8_t bank) {
+  return bank < 4 ? encFlavorMem[bank] : ENC_FLAVOR_DIALS;
+}
+
+const char* encFlavorName(uint8_t flavor) {
+  static const char* n[ENC_FLAVOR_COUNT] = { "DIALS", "BARS", "ENVELOPE",
+                                             "LFO" };
+  return flavor < ENC_FLAVOR_COUNT ? n[flavor] : n[0];
+}
+
+// One state per turn and NO wrap, like every other enum knob here - a wrapped
+// flavor would drop the one you just dialled in on the next detent
+void encFlavorStep(uint8_t bank, int16_t counts) {
+  if (bank >= 4 || counts == 0) return;
+  int v = (int)encFlavorMem[bank] + (counts > 0 ? 1 : -1);
+  if (v < 0) v = 0;
+  if (v >= ENC_FLAVOR_COUNT) v = ENC_FLAVOR_COUNT - 1;
+  encFlavorMem[bank] = (uint8_t)v;
+  // the bank being edited is the bank the row draws, now and after a mode
+  // round trip (encBankSet also stores the per-channel page it recalls from)
+  encBankSet(bank);
+}
+
+void encFlavorHold(bool on, uint8_t bank) {
+  flavorHeldBank = (on && bank < 4) ? bank : 0xFF;
+}
+
+uint8_t encFlavorHeld() { return flavorHeldBank; }
+
+uint8_t encCcNumIn(uint8_t ei, uint8_t bank) {
+  if (ei >= 8) return 1;
+  if (ei < 4) return ccMapChecked(CC_ENC_FIXED[ei]);
+  if (bank >= 4) bank = encBank();
+  const uint8_t g = encM3Sel ? 1 : 0;
+  return ccMapChecked(CC_ENC_BANK[g][bank][ei - 4]);
+}
+
+uint8_t encCcAt(uint8_t cc) {
+  if (cc < 1 || cc > CC_MAP_MAX) return 0;
+  return (uint8_t)ccVal[cc - 1][encChannel() - 1];
+}
+
 uint8_t encCcValue(uint8_t idx) {
   if (idx >= 8) return 0;
   return (uint8_t)ccVal[encCcNum(idx) - 1][encChannel() - 1];
@@ -2820,6 +2940,18 @@ void handleEncoderEvents() {
       any = true;
     }
 
+    // ENCMODE4 + a held F pad: ENC1 is that bank's FLAVOR knob and every other
+    // knob is idle, so a held F can neither send a stray CC nor move a value
+    // behind the menu
+    if (modeBase == MODE_ENC && modeVariant == 4 && encFlavorHeld() < 4) {
+      if (ei == 0) {
+        encFlavorStep(encFlavorHeld(), ed);
+        headerAnnounce("Flavor", encFlavorName(encFlavorOf(encFlavorHeld())));
+        refreshMainScreen();
+      }
+      continue;
+    }
+
     if (modeBase == MODE_ENC && !abltOn() && ei < 8 && ed != 0) {
       uint8_t cch = encChannel();
       uint8_t cc = encCcNum(ei);
@@ -2942,12 +3074,13 @@ void handleEncoderEvents() {
         any = true;
       } else if (ed != 0 && currentBinding().enc == ENC_SEQ_SKANK_STEP &&
                  seqTrStepSel >= 0) {
-        // the SKANK lock row (a step held on a POLY+SKANK track): ENC1..7
-        // override THAT step's derivation knob - turning while "inherit"
-        // grabs the track's page value and nudges it, turning under 0
-        // clears the lock back to inherit (0 is a legal value, the lock
-        // storage keeps it distinct); ENC8 = the step's TRANS like the
-        // plain held-step row (NOT% stays page-level, no lock slot)
+        // the SKANK lock row (a step held while the M2 SKANK page is
+        // open): ENC1..7 override THAT step's derivation knob - turning
+        // while "inherit" grabs the track's page value and nudges it,
+        // turning under 0 clears the lock back to inherit (0 is a legal
+        // value, the lock storage keeps it distinct); ENC8 = the step's
+        // TRANS like the plain held-step row (NOT% stays page-level, no
+        // lock slot)
         int8_t stp = seqTrStepSel;
         if (ei < 7) {
           static const char *nm[7] = { "Tessitura", "Motion", "Shape",
@@ -3327,11 +3460,48 @@ void handleEncoderEvents() {
         // (the HARM track's FILL% - the same per-track roll gate the
         // generators use; M3 lands chords on the rolled steps and clears
         // the rest), ENC3 = SRC (bass/arp source for the feeder read),
-        // ENC4 = HOLD (force hold on a repeated bass).  M3 bakes; ENC5..8
-        // keep their bindings, and a TYPE/channel/mode change drops the page
+        // ENC4 = HOLD (force hold on a repeated bass).  F2 swaps ENC1..4 to
+        // the voicing bank (SHAPE / SIZE / VOICE / INV - every turn
+        // re-voices the baked steps in place, one undo slot per burst).
+        // M3 bakes; ENC5..8 keep their bindings, and a TYPE/channel/mode
+        // change drops the page
         } else if (ed != 0 && harmPageActive() &&
             (ei == 0 || ei == 1 || ei == 2 || ei == 3)) {
-          if (ei == 0) {
+          if (harmSetSelGet() == 1) {
+            if (ei == 0) {
+              k4HarmShapeAdjust(ed);
+              headerAnnounce("Shape", k4HarmShapeName());
+              if (logRoom(48)) {
+                Serial.print("  harm shape ");
+                Serial.println(k4HarmShapeName());
+              }
+            } else if (ei == 1) {
+              k4HarmSizeAdjust(ed);
+              headerAnnounce("Size", k4HarmSizeName());
+              if (logRoom(48)) {
+                Serial.print("  harm size ");
+                Serial.println(k4HarmSizeName());
+              }
+            } else if (ei == 2) {
+              k4HarmSpreadAdjust(ed);
+              headerAnnounceInt("Voice", k4HarmSpread(), " oct");
+              if (logRoom(48)) {
+                Serial.print("  harm spread ");
+                Serial.print(k4HarmSpread());
+                Serial.println(" oct");
+              }
+            } else {
+              k4HarmInvAdjust(ed);
+              headerAnnounce("Inversion", k4HarmInvName());
+              if (logRoom(48)) {
+                Serial.print("  harm inv ");
+                Serial.println(k4HarmInvName());
+              }
+            }
+            k4HarmRevoice();           // re-voice the stored steps live
+            refreshAllLeds();          // the step LEDs follow the chords
+            refreshMainScreen();       // ...and the value row the new knobs
+          } else if (ei == 0) {
             k4GenreAdjust(ed);
             headerAnnounce("Genre", k4GenreName());  // the picked genre
             if (logRoom(48)) {

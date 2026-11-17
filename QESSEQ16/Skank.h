@@ -30,11 +30,12 @@
 //        to a random in-scale tone at the same register (stab size
 //        unchanged; applied after invert/thin, before finalize)
 //
-// Holding a step on the track arms the per-step LOCK row (encoders 1-7
-// override that step's parameter, 0 = inherit; encoder 8 = the step's
-// TRANS like the plain held-step row - NOT% stays page-level only).
-// Locks live with the step content (cleared together) and stay RAM only,
-// like every step field.
+// Holding a step while this page is open arms the per-step LOCK row
+// (encoders 1-7 override that step's parameter, 0 = inherit; encoder 8 =
+// the step's TRANS like the plain held-step row - NOT% stays page-level
+// only).  With the page closed a held step takes the plain TRANS row like
+// every other track.  Locks live with the step content (cleared together)
+// and stay RAM only, like every step field.
 struct Chord {
   uint8_t notes[8];
   uint8_t count;

@@ -87,6 +87,15 @@ void    chordKey4Bucket(uint8_t q, uint8_t ext, uint8_t bass);
 void    chordKey4Clear();                       // gesture over: restore state
 uint8_t chordBuild(uint8_t root, uint8_t q, uint8_t ext, uint8_t bass,
                    uint8_t *out);               // notes only (apply path)
+uint8_t chordBuildVoiced(uint8_t root, uint8_t q, uint8_t ext, uint8_t bass,
+                         uint8_t spread, uint8_t shape, uint8_t *out);
+                                // HARM F2 voicing bank: close root-position
+                                // stack with SIZE's extension (ext), then the
+                                // SHAPE layout (0 close / 1 open / 2 drop-2),
+                                // the INV bass seat (0 as-shaped, 1..3 rotate
+                                // the 3rd/5th/7th into the bass) and the
+                                // VOICE spread (raise everything above the
+                                // bass `spread` octaves).  Returns note count
 
 // lifecycle (keyboard output channel / octave / mode changes)
 void chordShift(int semitones);  // octave shift of the held/sounding chord

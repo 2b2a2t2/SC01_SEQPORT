@@ -357,10 +357,10 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
                     (uint8_t)(56 + k * 48));       // 196/56 .. 236/248
       }
     }
-    // SKANK lock hold (POLY+SKANK + hold step): the step being locked
-    // breathes violet, same gesture as the BASS armed dial (the playhead
-    // above still wins so the head stays readable; the lock row's own
-    // 30 ms refresh loop drives the pulse)
+    // SKANK lock hold (M2 SKANK page open + hold step): the step being
+    // locked breathes violet, same gesture as the BASS armed dial (the
+    // playhead above still wins so the head stays readable; the lock row's
+    // own 30 ms refresh loop drives the pulse)
     if (currentBinding().enc == ENC_SEQ_SKANK_STEP &&
         seqTrStepSelGet() == (int8_t)vst) {
       uint8_t s = sin8((uint32_t)millis() * 256UL / PULSE_PERIOD_MS);
@@ -673,6 +673,18 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
     if (genPageActive() && led >= groupControls[5] &&
         led <= groupControls[8]) {
       uint8_t sel = genOptionSel();
+      bool armed = (sel != 0xFF &&
+                    sel == (uint8_t)(led - groupControls[5]));
+      CRGB p = seqPageColor();
+      p.nscale8(sel == 0xFF ? 48 : (armed ? 176 : 32));
+      return p;
+    }
+    // HARM page open: the F row = the base row / voicing-bank radio (F1 =
+    // GENRE/FILL/SRC/HOLD, F2 = SHAPE/SIZE/VOICE/INV) - dim aqua marks the
+    // borrowed row, the armed bank burns bright
+    if (harmPageActive() && led >= groupControls[5] &&
+        led <= groupControls[8]) {
+      uint8_t sel = harmSetSelGet();
       bool armed = (sel != 0xFF &&
                     sel == (uint8_t)(led - groupControls[5]));
       CRGB p = seqPageColor();
@@ -1326,6 +1338,7 @@ void modeOnEvent(uint8_t pad, uint8_t ev) {
   encMuteHold(false);       // the M2 mute overlay never outlives the ENC mode
   drumMuteHold(false);      // nor the M1 drum-voice mute overlay
   ccCfgDismiss();           // nor the PREV CC CONFIG page
+  encFlavorHold(false, 0);  // nor a held ENCMODE4 FLAVOR menu
   arpPageDismiss();         // nor the M2 arp encoder page
   strumFRowDismiss();       // nor the M2 strum ADDS row
   genPageDismiss();         // nor the M2 BASS encoder page

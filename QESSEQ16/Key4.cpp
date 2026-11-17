@@ -84,6 +84,11 @@ static bool     sHarmInput = false; // EMB ENC3: false = bass (Mode A),
                                     // true = arp (Mode B) source for HARM
 static bool     sHarmHold  = false; // EMB ENC4: force hold when the bass
                                     // repeats a note (independent of MOTION)
+static uint8_t  sHarmShape = 0;   // F2 ENC1: 0 close, 1 open, 2 drop-2
+static uint8_t  sHarmSize  = 0;   // F2 ENC2: 0 triad, 1 7th, 2 9th
+static uint8_t  sHarmSprd  = 0;   // F2 ENC3: 0..3 octaves above the bass
+static uint8_t  sHarmInv   = 0;   // F2 ENC4: 0 as-shaped, 1..3 = 3rd/5th/7th
+static int16_t  sHarmRes[4];      // leftover counts for the four F2 knobs
 static bool     sWrite = false;  // M1: boots in AUDITION, land = opt-in
 static bool     sAuto = false;   // F4: boots with auto-advance off
 static bool     sLead = false;   // F3: minimal-bass-movement inversions
@@ -326,18 +331,29 @@ uint8_t decodeChord(const uint8_t *nt, uint8_t n,
   return fwDeg((uint8_t)(nt[0] % 12));
 }
 
+// SIZE -> extension mask: the diatonic 7th (M7 on maj, m7 on min/dim/sus =
+// half-dim / 7sus4), the 9th keeps it and adds the 9 on top
+static uint8_t harmExtOf(uint8_t q) {
+  if (sHarmSize == 0) return 0;
+  uint8_t e = (q == CHORD_Q_MAJ) ? CHORD_EXT_M7 : CHORD_EXT_m7;
+  if (sHarmSize >= 2) e |= CHORD_EXT_9;
+  return e;
+}
+
 // LIVE follow (playback, Keyboard.cpp): one feeder note that actually
-// PLAYED - post-probability, post-fold/arp-walk - becomes the plain
-// root-position triad of its nearest scale degree, in the same register
-// the bake writes.  An out-of-scale note snaps to the nearest in-scale
-// degree's chord (FScale philosophy); the diatonic quality is the degree's
-// own (same voicing k4HarmBody bakes), so live chords match stored ones
+// PLAYED - post-probability, post-fold/arp-walk - becomes the chord of its
+// nearest scale degree in the same register the bake writes, voiced with
+// the F2 SHAPE/SIZE/VOICE/INV settings.  An out-of-scale note snaps to the
+// nearest in-scale degree's chord (FScale philosophy); the diatonic quality
+// is the degree's own (same voicing k4HarmBody bakes), so live chords match
+// stored ones
 uint8_t k4HarmLiveChord(uint8_t note, uint8_t *out) {
   buildFw();
   uint8_t rootPc = 0, q = CHORD_Q_MAJ;
   uint8_t deg = decodeChord(&note, 1, &rootPc, &q);
   uint8_t root = (uint8_t)(12 * keyOctave() + 24 + sFw[deg]);
-  return chordBuild(root, q, 0, 0, out);   // plain triad, root pos
+  return chordBuildVoiced(root, q, harmExtOf(q), sHarmInv, sHarmSprd,
+                          sHarmShape, out);
 }
 
 // SKANK ENC6 (SUB): sample the current genre's transition row from the
@@ -1029,6 +1045,58 @@ bool k4HarmHold() { return sHarmHold; }
 const char* k4HarmHoldName() { return sHarmHold ? "ON" : "OFF"; }
 
 // ---------------------------------------------------------------------------
+// HARM F2 voicing bank (fixed choices; 4 counts = 1 step, clamped, no wrap)
+// ---------------------------------------------------------------------------
+void k4HarmShapeAdjust(int16_t counts) {
+  int16_t step = encStep(counts, &sHarmRes[0]);
+  if (!step) return;
+  int v = (int)sHarmShape + (int)step;
+  if (v < 0) v = 0;
+  if (v > 2) v = 2;
+  sHarmShape = (uint8_t)v;
+}
+const char* k4HarmShapeName() {
+  static const char* n[3] = { "Close", "Open", "Drop" };
+  return n[sHarmShape % 3];
+}
+
+void k4HarmSizeAdjust(int16_t counts) {
+  int16_t step = encStep(counts, &sHarmRes[1]);
+  if (!step) return;
+  int v = (int)sHarmSize + (int)step;
+  if (v < 0) v = 0;
+  if (v > 2) v = 2;
+  sHarmSize = (uint8_t)v;
+}
+const char* k4HarmSizeName() {
+  static const char* n[3] = { "Triad", "7th", "9th" };
+  return n[sHarmSize % 3];
+}
+
+void k4HarmSpreadAdjust(int16_t counts) {
+  int16_t step = encStep(counts, &sHarmRes[2]);
+  if (!step) return;
+  int v = (int)sHarmSprd + (int)step;
+  if (v < 0) v = 0;
+  if (v > 3) v = 3;
+  sHarmSprd = (uint8_t)v;
+}
+uint8_t k4HarmSpread() { return sHarmSprd; }
+
+void k4HarmInvAdjust(int16_t counts) {
+  int16_t step = encStep(counts, &sHarmRes[3]);
+  if (!step) return;
+  int v = (int)sHarmInv + (int)step;
+  if (v < 0) v = 0;
+  if (v > 3) v = 3;
+  sHarmInv = (uint8_t)v;
+}
+const char* k4HarmInvName() {
+  static const char* n[4] = { "Nat", "1st", "2nd", "3rd" };
+  return n[sHarmInv % 4];
+}
+
+// ---------------------------------------------------------------------------
 // embellishment encoders (PREV hold: EN5-8)
 // ---------------------------------------------------------------------------
 void k4EmbSubProbAdjust(int16_t counts) {
@@ -1535,9 +1603,10 @@ int k4ApplyAll() {
 // emission = how well the source fits as chord tones (bass: root > 5th >
 // 3rd; arp: any chord tone) and the transition = the existing scorePc term
 // (genre + motion + mood + cadence + voice-leading), so the source drives
-// the harmony while the genre grammar smooths the path.  Plain root-position
-// triads are baked into the HARM track's own steps (the feeder is only read,
-// never written), a REST in the source carries the previous chord; M3-hold
+// the harmony while the genre grammar smooths the path.  The chords are
+// baked into the HARM track's own steps with the F2 voicing bank's SHAPE/
+// SIZE/VOICE/INV settings (the feeder is only read, never written), a REST
+// in the source carries the previous chord; M3-hold
 // undoes the whole gesture.  Pairs with FOLLOW/LEAD: bass -> HARM -> chords
 // -> FOLLOW -> LEAD.  Driven by the POLY TYPE=HARM page (M3), reusing the
 // KEYMODE4 genre/knob grammar for the transitions.
@@ -1739,7 +1808,8 @@ static int k4HarmBody(bool automatic) {
     uint8_t q = fwQuality(deg);
     uint8_t root = (uint8_t)(12 * keyOctave() + 24 + sFw[deg]);
     uint8_t notes[8];
-    uint8_t n = chordBuild(root, q, 0, 0, notes);   // plain triad, root pos
+    uint8_t n = chordBuildVoiced(root, q, harmExtOf(q), sHarmInv, sHarmSprd,
+                                 sHarmShape, notes);   // F2 voicing bank
     if (n == 0) continue;
     if (automatic && stepChordSame(st, notes, n)) { written++; continue; }
     if (stepChordWrite(st, notes, n) < 0) continue;
@@ -1758,10 +1828,75 @@ int k4Harm() { return k4HarmBody(false); }
 // inference, no snapshot, no context rebuild
 int k4HarmRebake() { return k4HarmBody(true); }
 
+// The chord identity a re-voice rebuilds from: the same triad-template
+// match fxRootQ uses (lowest matching note wins - inversions cannot fool
+// it), but reporting whether a triad was found at all - a dyad or a quartal
+// stack has none and is not ours to re-voice
+static bool harmChordId(const uint8_t *ch, uint8_t n, int *root, uint8_t *q) {
+  bool pc[12] = {false};
+  for (uint8_t i = 0; i < n; i++) pc[ch[i] % 12] = true;
+  int best = -1;
+  uint8_t bq = CHORD_Q_MAJ;
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t r = (uint8_t)(ch[i] % 12);
+    uint8_t qTry = CHORD_Q_MAJ;
+    if (pc[(r + 4) % 12] && pc[(r + 7) % 12])      qTry = CHORD_Q_MAJ;
+    else if (pc[(r + 3) % 12] && pc[(r + 7) % 12]) qTry = CHORD_Q_MIN;
+    else if (pc[(r + 3) % 12] && pc[(r + 6) % 12]) qTry = CHORD_Q_DIM;
+    else if (pc[(r + 5) % 12] && pc[(r + 7) % 12]) qTry = CHORD_Q_SUS;
+    else if (pc[(r + 2) % 12] && pc[(r + 7) % 12]) qTry = CHORD_Q_SUS;
+    else continue;                                 // this note is no root
+    if (best < 0 || ch[i] < best) { best = ch[i]; bq = qTry; }
+  }
+  if (best < 0) return false;
+  *root = best;
+  *q = bq;
+  return true;
+}
+
+// Live re-voice (F2 knob turn): rebuild every stored chord of the HARM
+// track with the current SHAPE/SIZE/VOICE/INV settings.  Root + quality are
+// recovered from the stored notes (harmChordId) and snapped to the bake's
+// register, so a re-voiced step sounds like the bake would write it; a
+// chord with no triad inside is left alone rather than flattened.  Writes
+// go through stepChordWriteKeepAtt: the notes move, the step's attributes
+// (att/FX/EMB/TRANS/mods) stay put.  The undo slot is claimed once per
+// tweak burst (sRegenSnap, shared with k4Regenerate): M3-hold after a knob
+// burst still lands on the pre-tweak progression.  Returns the steps
+// rewritten
+int k4HarmRevoice() {
+  int L = seqPatLen();
+  if (L <= 0 || L > 64) return -1;
+  if (!sRegenSnap) {
+    stepSnapshotTake();
+    sRegenSnap = true;
+  }
+  buildFw();
+  uint8_t ch = seqEditChannel();
+  int written = 0;
+  for (int st = 0; st < L; st++) {
+    uint8_t n = 0;
+    const uint8_t *nt = stepChordAtCh(ch, (uint8_t)st, &n);
+    if (!nt || n < 2) continue;
+    int root = 0;
+    uint8_t q = CHORD_Q_MAJ;
+    if (!harmChordId(nt, n, &root, &q)) continue;  // not a HARM chord
+    uint8_t notes[8];
+    uint8_t m = chordBuildVoiced((uint8_t)root, q, harmExtOf(q), sHarmInv,
+                                 sHarmSprd, sHarmShape, notes);
+    if (m == 0) continue;
+    if (stepChordSame((uint8_t)st, notes, m)) continue;
+    if (stepChordWriteKeepAtt((uint8_t)st, notes, m) < 0) continue;
+    written++;
+  }
+  return written;
+}
+
 // The chord HARM infers for ONE step: the same Viterbi the M3 bake uses, so
 // activating a HARM track's step (with no held gesture) records exactly the
 // chord the bake would have written there - a chord that fits the feeder
-// bass/arp, never the feeder's raw single note.  Returns the note count
+// bass/arp (never the feeder's raw single note), voiced with the F2 bank's
+// SHAPE/SIZE/VOICE/INV settings.  Returns the note count
 // (0 = nothing to record: no feeder content yet, or step past the pattern)
 int k4HarmStepChord(uint8_t step, uint8_t *notes) {
   if (!notes) return 0;
@@ -1779,7 +1914,8 @@ int k4HarmStepChord(uint8_t step, uint8_t *notes) {
   if (!any) return 0;             // feeder empty up to here: keep pending
   uint8_t q = fwQuality(deg);
   uint8_t root = (uint8_t)(12 * keyOctave() + 24 + sFw[deg]);
-  return chordBuild(root, q, 0, 0, notes);   // plain triad, root pos
+  return chordBuildVoiced(root, q, harmExtOf(q), sHarmInv, sHarmSprd,
+                          sHarmShape, notes);   // F2 voicing bank
 }
 
 // live re-apply while a GENRE/knob turn changes the parameters: same walk

@@ -51,6 +51,41 @@ void ccCfgDismiss();
 bool ccCfgOpen();      // the latch PREV set
 bool ccCfgActive();    // ...and drawable now: ENCMODE 1/2/4, no Live overlay
 
+// ENCMODE4 FLAVOR: how the ENC5..8 row is DRAWN - dials (as everywhere), level
+// bars for volume / expression CCs, or one ADSR curve across the row (ENC5 =
+// attack, ENC6 = decay, ENC7 = sustain, ENC8 = release), each value keeping its
+// own tight bar.  One flavor PER F bank, the row draws the armed bank's, and it
+// does so on ENCMODE 1, 2 and 4 (not on 3, the channel picker) - leaving
+// ENCMODE4 for plain ENCMODE keeps the row, it does not fall back to dials.
+// Opening the FLAVOR menu arms the bank it edits, so the flavor you set stays
+// on screen and comes back with that bank after a mode round trip.
+// RAM only; it never touches the CC numbers or the stored values, which keep
+// sending exactly as before
+#define ENC_FLAVOR_DIALS  0
+#define ENC_FLAVOR_BARS   1
+#define ENC_FLAVOR_ENV    2
+// ENC5 = depth (0..100%), ENC6 = rate (0.01..10 Hz), ENC7 = shape (sine / tri /
+// rise / fall / square / random), ENC8 = sync (Hz / beat / trig).  A still
+// waveform, not a running one: the knobs change its shape
+#define ENC_FLAVOR_LFO    3
+#define ENC_FLAVOR_COUNT  4
+
+uint8_t encFlavorOf(uint8_t bank);                 // 0..2, bank 0..3 = F1..F4
+const char* encFlavorName(uint8_t flavor);         // DIALS / BARS / ENVELOPE / LFO
+void encFlavorStep(uint8_t bank, int16_t counts);  // one state per turn, no wrap
+
+// Is an F pad HELD in ENCMODE4 (0..3), 0xFF when nothing is held - what opens
+// the FLAVOR menu.  The row previews that bank's numbers while it is up, so the
+// change is visible under the finger
+void encFlavorHold(bool on, uint8_t bank);
+uint8_t encFlavorHeld();
+
+// CC number knob ei sends when `bank` (0..3) is the armed one - what the
+// FLAVOR preview prints while another bank's pad is held
+uint8_t encCcNumIn(uint8_t ei, uint8_t bank);
+// value of one CC on the current encoder channel (the preview's values)
+uint8_t encCcAt(uint8_t cc);
+
 // incoming CC feedback from the DAW: syncs the ENCMODE knob positions
 // (channel 1..16, CC 1..36); store only, never re-sent
 void encCcIncoming(uint8_t ch, uint8_t cc, uint8_t val);
@@ -178,6 +213,8 @@ bool leadPageActive();
 void harmPageToggle();
 void harmPageDismiss();
 bool harmPageActive();
+uint8_t harmSetSelGet();          // 0..3 = armed F set, 0xFF = base row
+void harmSetSelSet(uint8_t s);
 
 // SEQMODE M2 (variants 1/2/4) on a POLY+STEP edit track: a click toggles
 // the COMP encoder page - ENC1 = HITS (chord stabs per step, Euclid in 8

@@ -723,6 +723,98 @@ uint8_t chordBuild(uint8_t root, uint8_t q, uint8_t ext, uint8_t bass,
   return buildNotes(r, q, ext, bass, 0, 0, 0, out);
 }
 
+// move voice i by delta semitones: false = out of range or landing on a
+// pitch the stack already holds (the caller leaves the stack untouched)
+static bool voiceMove(uint8_t *a, uint8_t n, uint8_t i, int delta) {
+  int v = (int)a[i] + delta;
+  if (v < 0 || v > 127) return false;
+  for (uint8_t j = 0; j < n; j++)
+    if (j != i && (int)a[j] == v) return false;
+  a[i] = (uint8_t)v;
+  return true;
+}
+
+// insertion sort (n <= CHORD_N): keep the stack ascending after a layout
+// move so out[0] stays the bass for every later pass
+static void voiceSort(uint8_t *a, uint8_t n) {
+  for (uint8_t i = 1; i < n; i++) {
+    uint8_t v = a[i];
+    int8_t j = (int8_t)i - 1;
+    while (j >= 0 && a[j] > v) {
+      a[j + 1] = a[j];
+      j--;
+    }
+    a[j + 1] = v;
+  }
+}
+
+// HARM's voiced builder (the F2 voicing bank): the close root-position stack
+// with SIZE's extension, then the SHAPE layout (1 = open: the 2nd/4th...
+// voices up an octave - root + 5th + 10th...; 2 = drop-2: the 2nd voice from
+// the top down an octave, allowed to seat a new bass - that is the layout's
+// point), the INV bass seat (0 = as shaped; 1/2/3 = rotate so the 3rd/5th/
+// seventh sits at the bottom - the same bottom-to-top rotation buildNotes'
+// voicing param and stepInvAdjust use, so a rotation wraps: on a TRIAD the
+// 3RD position lands back on NAT) and the VOICE spread (everything above
+// the final bass raised `spread` octaves, never folded down).  Every move
+// refuses an out-of-range landing or a pitch the stack already holds, so a
+// knob can never corrupt a chord.  Returns the note count.
+uint8_t chordBuildVoiced(uint8_t root, uint8_t q, uint8_t ext, uint8_t bass,
+                         uint8_t spread, uint8_t shape, uint8_t *out) {
+  int r = root;
+  if (r < 36) r = 36;
+  if (r > 84) r = 84;
+  uint8_t n = buildNotes(r, q, ext, 0, 0, 0, 0, out);
+  if (n < 2) return n;
+
+  // SHAPE: the layout of the close stack
+  if (shape == 1 || shape == 2) {
+    uint8_t tmp[CHORD_N];
+    for (uint8_t i = 0; i < n; i++) tmp[i] = out[i];
+    bool ok = true;
+    if (shape == 1) {                       // open: odd 1-based voices up
+      for (uint8_t i = 1; i < n && ok; i += 2)
+        ok = voiceMove(tmp, n, i, 12);
+    } else if (n >= 3) {                    // drop-2: 2nd from the top down
+      ok = voiceMove(tmp, n, (uint8_t)(n - 2), -12);
+    }
+    if (ok) {
+      voiceSort(tmp, n);
+      for (uint8_t i = 0; i < n; i++) out[i] = tmp[i];
+    }
+  }
+
+  // INV: seat the chosen chord tone in the bass by rotating the stack (the
+  // bottom voice climbs an octave to the top), so the note count never grows
+  if (bass > 0 && n > 1) {
+    uint8_t rot = bass % n;
+    uint8_t tmp[CHORD_N];
+    for (uint8_t i = 0; i < n; i++) tmp[i] = out[i];
+    for (uint8_t v = 0; v < rot; v++) {
+      uint8_t low = tmp[0];
+      for (uint8_t i = 0; i + 1 < n; i++) tmp[i] = tmp[i + 1];
+      tmp[n - 1] = clampNote((int)low + 12);
+    }
+    voiceSort(tmp, n);
+    for (uint8_t i = 0; i < n; i++) out[i] = tmp[i];
+  }
+
+  // VOICE: spread the stack above the bass (raise, never fold)
+  if (spread > 0 && n > 1) {
+    uint8_t tmp[CHORD_N];
+    for (uint8_t i = 0; i < n; i++) tmp[i] = out[i];
+    uint8_t low = tmp[0];
+    for (uint8_t i = 1; i < n; i++) if (tmp[i] < low) low = tmp[i];
+    bool ok = true;
+    for (uint8_t i = 0; i < n && ok; i++) {
+      if (tmp[i] == low) continue;         // the bass anchors the spread
+      ok = voiceMove(tmp, n, i, (int)spread * 12);
+    }
+    if (ok) for (uint8_t i = 0; i < n; i++) out[i] = tmp[i];
+  }
+  return n;
+}
+
 // ---------------------------------------------------------------------------
 // lifecycle
 // ---------------------------------------------------------------------------

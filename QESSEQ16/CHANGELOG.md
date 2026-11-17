@@ -69,6 +69,50 @@ de-facto version marker is the size of the saved-settings block (see
   with no other code touched. Entries are clamped to **CC 1–36**, the range the
   per-CC-per-channel value store (RAM + the 579-byte EEPROM block) can hold.
 
+### ENCMODE4: a `FLAVOR` for each F bank's second row
+
+- **The `ENC5–8` row can now be drawn four ways in ENCMODE4** — `DIALS` (as everywhere),
+  `BARS` (a level bar per CC, which reads better for a volume or expression number) and
+  `ENVELOPE`, which splits the row with a blank band down the middle: the left half (under
+  `ENC1`/`ENC2`) draws a **24 dB/oct low-pass** — a shelf at about half the band's height, a
+  resonant bump at the corner (cutoff moves it, resonance lifts it), then the steep drop — with
+  no readout under it, since those two numbers are the dials directly above; the right half the
+  **ADSR** of `ENC5` attack, `ENC6` decay, `ENC7` sustain, `ENC8` release at half the row's
+  width, with a straight attack, bending decay/release, and a tight bar plus **A / D / S / R**
+  under each stage. The envelope is laid out left to right, so the release's end moves with the
+  release knob and stops short of the row's right edge. The filter's slope is drawn as a wall
+  (the plot is deliberately steeper than the 24 dB/oct it describes), so the end of the picture
+  reads as a low-pass rather than as a diagonal. Each F bank keeps its own flavor, and the row
+  draws the armed bank's: the F hold (and the FLAVOR knob itself) arms the bank being edited, so
+  the presentation you pick stays on screen and comes back with that bank after leaving and
+  re-entering ENCMODE instead of showing another bank's `DIALS`. Holding an F pad to set the flavor arms that bank, so the row keeps the
+  flavor you chose instead of falling back to the previously armed bank's dials.
+- **A third flavor, `LFO`, splits the row like the envelope's and draws a still waveform on
+  the right**: the filter (same LPF24, same width) stays on the left under `ENC1`/`ENC2`, and
+  the right half carries the waveform plus its four values. `ENC5` = depth
+  (`0–100 %`, a flat line at 0), `ENC6` = rate (`0.01–10 Hz`, also the number of cycles
+  squeezed across the row), `ENC7` = shape (`SINE` / `TRI` / `RISE` / `FALL` / `SQUARE` /
+  `RANDOM`, the last a stepped sample-and-hold), `ENC8` = sync (`HZ` free-running, `BEAT`
+  whole cycles with a rule at each boundary, `TRIG` one shot: a single cycle as wide as one
+  cycle at the current rate, then the flat line it leaves behind, with a rule where the shot
+  ended — so `ENC6` still changes the picture with `TRIG` selected instead of every rate
+  drawing the same full-width cycle). Nothing moves — the knobs only change the picture — and
+  each readout prints what its value means (`DEPTH 75%`, `RATE 2.53HZ`, `SHAPE RANDOM`,
+  `SYNC BEAT`) instead of the raw 0–127 the dial above it already carries, caption and value
+  on **one line** in four 90 px slots that start at the `ENC2` column and use the empty band
+  under the filter's tail (the curve ends above it) — `SHAPE RANDOM` does not fit the ADSR's
+  52 px column, and the whole line would have to be two lines there. The mapping lives in `Screen.h`, so the panel, the OLED and the
+  readout text cannot disagree.
+- **The flavor follows the bank across the family**: it is drawn on **ENCMODE 1, 2 and 4**, not
+  only on 4 — clicking from ENCMODE4 back to plain ENCMODE used to repaint the second row as
+  dials (the draw was gated on `modeVariant == 4`), which read as the flavor resetting even
+  though the bank still held it. Only ENCMODE3, whose pads are the channel overlay, keeps its
+  label/value screen; the `FLAVOR` menu itself is still the variant-4 F hold.
+- **Hold an F pad and the row previews that bank with `ENC1` = `FLAVOR`**: one state per
+  turn, no wrap, every other knob idle while the hold lasts; releasing puts the row back on
+  the armed bank. One flavor per F bank, RAM only — and it is a drawing choice, so the CC
+  numbers, the stored values and the MIDI send are exactly what they were.
+
 ### Leaving a page (or moving TRACK / TYPE) lands back on step edit
 
 - **Closing an M2 page with its own `M2` press — and turning the `TRACK` or `TYPE` knob — now

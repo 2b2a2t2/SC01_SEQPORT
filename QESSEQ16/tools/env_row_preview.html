@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QESSEQ16 — ENCMODE4 row preview (ENVELOPE / LFO)</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 18px 22px 28px;
+    background: #101214; color: #c9cdd2;
+    font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  h1 { font-size: 14px; font-weight: 600; letter-spacing: .04em; margin: 0 0 4px; color: #e8ebee; }
+  p.note { margin: 0 0 14px; color: #7e858d; max-width: 980px; }
+  .row-wrap {
+    display: inline-block; border: 1px solid #2a2f35; background: #000;
+    line-height: 0;
+  }
+  canvas { width: 960px; height: 150px; image-rendering: pixelated; display: block; }
+  .controls {
+    margin-top: 16px; display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 22px;
+    max-width: 960px;
+  }
+  .ctl { display: grid; grid-template-columns: 92px 1fr 42px; align-items: center; gap: 8px; }
+  .ctl span:first-child { color: #8b9299; }
+  .ctl output { text-align: right; color: #e8ebee; }
+  input[type=range] { width: 100%; accent-color: #00e5ff; }
+  .extra { margin-top: 14px; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+  label.check { color: #8b9299; display: flex; gap: 6px; align-items: center; }
+  button {
+    background: #1b2026; color: #c9cdd2; border: 1px solid #2f363d;
+    border-radius: 5px; padding: 5px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: #47505a; color: #fff; }
+  .legend { margin-top: 12px; color: #7e858d; }
+  .legend b { color: #00e5ff; font-weight: 500; }
+</style>
+</head>
+<body>
+<h1>ENCMODE4 &middot; FLAVOR = ENVELOPE &mdash; the 480 &times; 75 row</h1>
+<p class="note">
+  Drawn with the constants and maths of <code>ScreenPanel.cpp</code>: same cell sizes,
+  same <code>filterLevel()</code> / <code>envLevel()</code> / <code>expFall()</code>, same pixel sampling
+  (one sample per column, <code>lroundf</code>), same gap and readout geometry. Shown at 2&times;;
+  each canvas pixel is one panel pixel. The caption font is a stand-in for the embedded
+  10&nbsp;px Nasalization bitmap, so text will look slightly different on the panel.
+</p>
+
+<div class="row-wrap">
+  <canvas id="row" width="480" height="75"></canvas>
+</div>
+
+<div class="controls" id="controls"></div>
+
+<div class="extra">
+  <label class="check"><input type="checkbox" id="bounds"> show cell bounds (120 px)</label>
+  <label class="check"><input type="checkbox" id="grid" checked> show the row's top grid line</label>
+  <button id="reset">reset to A64 D32 S100 R48, cut 63 / res 96</button>
+</div>
+
+<div class="legend">
+  <b>left</b> filter: 0&ndash;190 px shelf / bump / cliff, no readout &nbsp;&middot;&nbsp;
+  <b>gap</b> 190&ndash;239 px blank &nbsp;&middot;&nbsp;
+  <b>right</b> ADSR: 240&ndash;479 px, four 60 px slots with A / D / S / R bars
+</div>
+
+<h1 style="margin-top:28px">ENCMODE4 &middot; FLAVOR = LFO &mdash; the same 480 &times; 75 row</h1>
+<p class="note">
+  The LFO flavor, laid out like the envelope one: the <b>same filter</b> on the left
+  (driven by the cutoff / resonance sliders above), a blank band, then the still waveform
+  on the right &mdash; same <code>lfoWave()</code> / <code>lfoCycles()</code> /
+  <code>lfoShape()</code> / <code>lfoSync()</code> as <code>Screen.h</code> (depth = height,
+  rate = cycles across the half, shape = the waveform, sync = free / whole beats with a
+  rule at each boundary / one shot — a single cycle as wide as one cycle of the rate, then
+  the flat line it leaves, with a rule at its end), one sample per column, with its four
+  values on <b>one line</b> under the row. Nothing animates here either.
+</p>
+
+<div class="row-wrap">
+  <canvas id="lfoRow" width="480" height="75"></canvas>
+</div>
+
+<div class="controls" id="lfoControls"></div>
+
+<div class="legend">
+  <b>left</b> filter: 0&ndash;190 px, no readout &nbsp;&middot;&nbsp;
+  <b>gap</b> 190&ndash;239 px blank &nbsp;&middot;&nbsp;
+  <b>right</b> LFO: 240&ndash;479 px &nbsp;&middot;&nbsp;
+  <b>readouts</b> 120&ndash;479 px, one line, four 90 px slots (DEPTH / RATE / SHAPE / SYNC)
+</div>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ */
+/* ScreenPanel.cpp constants (kept in the file's own numbers)          */
+/* ------------------------------------------------------------------ */
+const PANEL_W   = 480;
+const CELL_W    = PANEL_W / 4;              // 120
+const CELL_H    = 75;
+const ENV_TOP   = 8;
+const ENV_H     = 36;
+const ENV_BAR_Y = ENV_TOP + ENV_H + 4;      // 48
+const ENV_BAR_H = 6;
+const ENV_CAP_Y = ENV_BAR_Y + ENV_BAR_H + 2; // 56
+const ENV_HALF_W = PANEL_W / 2;             // 240
+const ENV_SLOT_W = ENV_HALF_W / 4;          // 60
+const ENV_GAP    = 50;
+const ENV_FLT_END = ENV_HALF_W - ENV_GAP;   // 190
+const ENV_ENV_X   = ENV_HALF_W;             // 240
+const LFO_READ_X  = PANEL_W / 4;            // 120: the readout line starts under ENC2
+const LFO_SLOT_W  = (PANEL_W - LFO_READ_X) / 4; // 90: one readout
+const LFO_READ_Y  = ENV_CAP_Y;              // 56: the ADSR's caption line
+
+/* COL_* are RGB565 in the firmware; these are their 8-bit equivalents */
+const COL_BG     = "#000000";  // 0x0000
+const COL_GRID   = "#292d29";  // 0x2965
+const COL_DIM    = "#8c8d8c";  // 0x8c71
+const COL_TEXT   = "#ffffff";  // 0xffff
+const COL_ACCENT = "#00ffff";  // 0x07ff
+
+const CAPS = ["A", "D", "S", "R"];   // what Display.cpp passes for the stages
+
+/* ------------------------------------------------------------------ */
+/* The maths, verbatim from ScreenPanel.cpp                            */
+/* ------------------------------------------------------------------ */
+function expFall(u) {
+  const k = 0.0183156;                 // e^-4
+  if (u <= 0.0) return 1.0;
+  if (u >= 1.0) return 0.0;
+  return (Math.exp(-4.0 * u) - k) / (1.0 - k);
+}
+
+const ENV_EDGE = 0.88;   // the envelope never reaches past this
+
+function envSegments(v) {
+  const a = 0.05 + 0.30 * (v[0] / 127.0);            // attack end
+  const d = 0.04 + 0.16 * (v[1] / 127.0);            // decay length
+  const decayEnd = a + d;
+
+  const relStart = decayEnd + 0.12;                  // the sustain's flat run
+  let relEnd = relStart + 0.05 + 0.16 * (v[3] / 127.0);   // moves with R
+  let start = relStart;
+  if (relEnd > ENV_EDGE) {
+    relEnd = ENV_EDGE;
+    if (start > relEnd - 0.02) start = relEnd - 0.02;
+  }
+  return { a, decayEnd, relStart: start, relEnd };
+}
+
+function envLevel(x, v) {
+  const { a, decayEnd, relStart, relEnd } = envSegments(v);
+  const s = v[2] / 127.0;                            // sustain level
+
+  if (x <= 0.0) return 0.0;
+  if (x < a) return a > 0.0 ? x / a : 1.0;
+  if (x < decayEnd) return s + (1.0 - s) * expFall((x - a) / (decayEnd - a));
+  if (x < relStart) return s;
+  if (x < relEnd) return s * expFall((x - relStart) / (relEnd - relStart));
+  return -1.0;                                       // past the release
+}
+
+function filterLevel(f, cutoff, res) {
+  // x axis is LOG frequency: three decades across the half, corner in decades
+  const dec = f * 3.0;
+  const f0 = 0.25 + 2.10 * (cutoff / 127.0);
+  const r = res / 127.0;
+  const dd = dec - f0;
+  const x = Math.pow(10.0, Math.min(dd, 0.3));            // f / f0
+  const x8 = x * x * x * x * x * x * x * x;
+  const x16 = x8 * x8;
+  const mag = 1.0 / Math.sqrt(1.0 + x16 * x16 * x16);     // brick wall
+  // bump is asymmetric: wide shoulder before the corner, narrow after it
+  const width = dd < 0 ? (0.10 + 0.08 * r) : (0.03 + 0.02 * r);
+  const d = dd / width;
+  let lvl = 0.55 * mag + 0.42 * r * Math.exp(-d * d);
+  if (lvl > 0.97) lvl = 0.97;
+  return lvl;
+}
+
+/* ------------------------------------------------------------------ */
+/* Drawing                                                             */
+/* ------------------------------------------------------------------ */
+const canvas = document.getElementById("row");
+const ctx = canvas.getContext("2d");
+const state = { cutoff: 63, res: 96, adsr: [64, 32, 100, 48], bounds: false, grid: true };
+
+function px(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 1, 1);
+}
+
+// tft.drawLine() between two adjacent columns: the vertical run in the new one
+function seg(x0, y0, x1, y1) {
+  px(x0, y0, COL_ACCENT);
+  const top = Math.min(y0, y1), bot = Math.max(y0, y1);
+  ctx.fillStyle = COL_ACCENT;
+  ctx.fillRect(x1, top, 1, bot - top + 1);
+}
+
+// One tight readout: a w px bar filled to the value, its stage caption on the
+// left and the number on the right (envReadout()).
+function envReadout(x, y, w, cap, v) {
+  if (w < 8) return;
+  ctx.fillStyle = COL_GRID;
+  ctx.fillRect(x, y + ENV_BAR_Y, w, ENV_BAR_H);
+  const fill = Math.trunc(v * (w - 2) / 127);
+  if (fill > 0) {
+    ctx.fillStyle = COL_ACCENT;
+    ctx.fillRect(x + 1, y + ENV_BAR_Y + 1, fill, ENV_BAR_H - 2);
+  }
+
+  ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+  ctx.fillStyle = COL_DIM;
+  ctx.fillText(cap, x, y + ENV_CAP_Y);
+  ctx.textAlign = "right";
+  ctx.fillStyle = COL_TEXT;
+  ctx.fillText(String(v), x + w, y + ENV_CAP_Y);
+  ctx.textAlign = "left";
+}
+
+// drawEnvSlice(): cell i paints its own 120 px of the shared row
+function drawEnvSlice(i) {
+  const x = (i & 3) * CELL_W;
+  const y = 0;
+
+  let prevX = x;
+  let prevY = y + ENV_TOP + ENV_H - 1;
+  let joined = false;
+  for (let column = x; column < x + CELL_W; column++) {
+    let py;
+    if (column < ENV_FLT_END) {
+      const f = column / (ENV_FLT_END - 1);
+      const lvl = filterLevel(f, state.cutoff, state.res);
+      // the curve ends on the floor where the response runs out
+      if (lvl < 0.015) {
+        joined = false;
+        continue;
+      }
+      py = y + ENV_TOP + Math.round((1.0 - lvl) * (ENV_H - 1));
+    } else if (column >= ENV_ENV_X) {
+      const t = (column - ENV_ENV_X) / (PANEL_W - ENV_ENV_X - 1);
+      const lvl = envLevel(t, state.adsr);
+      // the envelope ends before the row's right edge: nothing to draw after
+      if (lvl < 0.0) {
+        joined = false;
+        continue;
+      }
+      py = y + ENV_TOP + Math.round((1.0 - lvl) * (ENV_H - 1));
+    } else {
+      joined = false;                 // the gap: draw nothing, join nothing
+      continue;
+    }
+    if (joined) seg(prevX, prevY, column, py);
+    prevX = column;
+    prevY = py;
+    joined = true;
+  }
+
+  if (i >= 6) {
+    for (let j = 0; j < 2; j++) {
+      const v = (i - 6) * 2 + j;
+      envReadout(ENV_ENV_X + v * ENV_SLOT_W + 4, y, ENV_SLOT_W - 8, CAPS[v], state.adsr[v]);
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = COL_BG;
+  ctx.fillRect(0, 0, PANEL_W, CELL_H);
+  if (state.grid) {
+    ctx.fillStyle = COL_GRID;
+    ctx.fillRect(0, 0, PANEL_W, 1);     // the row's top edge (row > 0)
+  }
+  for (let i = 4; i < 8; i++) drawEnvSlice(i);
+
+  if (state.bounds) {
+    ctx.save();
+    ctx.setLineDash([2, 2]);
+    ctx.strokeStyle = "#3a444d";
+    for (const bx of [120, 240, 360]) {
+      ctx.beginPath();
+      ctx.moveTo(bx + 0.5, 0);
+      ctx.lineTo(bx + 0.5, CELL_H);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Controls                                                            */
+/* ------------------------------------------------------------------ */
+// slot: 0..3 = that ADSR stage, -1 = cutoff, -2 = resonance
+const CONTROL_DEFS = [
+  { label: "cutoff",    slot: -1 },
+  { label: "resonance", slot: -2 },
+  { label: "A attack",  slot: 0 },
+  { label: "D decay",   slot: 1 },
+  { label: "S sustain", slot: 2 },
+  { label: "R release", slot: 3 },
+];
+
+const controlsEl = document.getElementById("controls");
+const inputs = [];
+const outs = [];
+
+function valueOf(slot) {
+  if (slot === -1) return state.cutoff;
+  if (slot === -2) return state.res;
+  return state.adsr[slot];
+}
+
+function setValue(slot, value) {
+  if (slot === -1) state.cutoff = value;
+  else if (slot === -2) state.res = value;
+  else state.adsr[slot] = value;
+}
+
+CONTROL_DEFS.forEach((def, i) => {
+  const row = document.createElement("div");
+  row.className = "ctl";
+
+  const name = document.createElement("span");
+  name.textContent = def.label;
+
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = 0;
+  input.max = 127;
+  input.step = 1;
+  input.value = valueOf(def.slot);
+
+  const out = document.createElement("output");
+  out.textContent = String(valueOf(def.slot));
+
+  input.addEventListener("input", () => {
+    const value = Number(input.value);
+    setValue(def.slot, value);
+    out.textContent = String(value);
+    draw();
+    drawLfo();          // the LFO view borrows the same filter numbers
+  });
+
+  inputs[i] = input;
+  outs[i] = out;
+  row.append(name, input, out);
+  controlsEl.append(row);
+});
+
+document.getElementById("bounds").addEventListener("change", (e) => {
+  state.bounds = e.target.checked;
+  lfo.bounds = e.target.checked;
+  draw();
+  drawLfo();
+});
+document.getElementById("grid").addEventListener("change", (e) => {
+  state.grid = e.target.checked;
+  lfo.grid = e.target.checked;
+  draw();
+  drawLfo();
+});
+document.getElementById("reset").addEventListener("click", () => {
+  state.cutoff = 63;
+  state.res = 96;
+  state.adsr = [64, 32, 100, 48];
+  syncInputs();
+  draw();
+  drawLfo();
+});
+
+function syncInputs() {
+  CONTROL_DEFS.forEach((def, i) => {
+    const value = valueOf(def.slot);
+    inputs[i].value = value;
+    outs[i].textContent = String(value);
+  });
+}
+
+syncInputs();
+draw();
+
+/* ------------------------------------------------------------------ */
+/* FLAVOR = LFO: Screen.h's mapping and drawLfoSlice()'s sampling      */
+/* ------------------------------------------------------------------ */
+const LFO_SHAPES = 6;   // SINE / TRI / RISE / FALL / SQUARE / RANDOM
+const LFO_SYNCS = 3;    // HZ / BEAT / TRIG
+const clamp7 = (v) => (v > 127 ? 127 : v);
+const lfoShapeIdx = (v) => (clamp7(v) * LFO_SHAPES) >> 7;
+const lfoSyncIdx = (v) => (clamp7(v) * LFO_SYNCS) >> 7;
+const lfoRateHz = (v) => 0.01 * Math.pow(1000, clamp7(v) / 127);
+const lfoCycles = (v) => 0.5 * Math.pow(16, clamp7(v) / 127);
+
+// the sample-and-hold's uint32 hash, same constants as the firmware's
+function lfoHash(step) {
+  let h = (Math.imul(step, 2654435761) + 0x9E3779B9) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0;
+  h = Math.imul(h, 2246822519) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h;
+}
+
+// u = 0..1 across the row, cycles = whole cycles in that row.  RANDOM is a
+// sample-and-hold of one value per cycle, with a floor of four steps so a slow
+// random LFO does not come out as a flat line.
+function lfoWave(u, cycles, shape) {
+  if (cycles <= 0) cycles = 1;
+  const pos = u * cycles;
+  const step = Math.floor(pos);
+  const p = pos - step;
+  switch (shape) {
+    case 1:
+      if (p < 0.25) return 4 * p;
+      if (p < 0.75) return 2 - 4 * p;
+      return 4 * p - 4;
+    case 2: return 2 * p - 1;                       // rising saw
+    case 3: return 1 - 2 * p;                       // falling saw
+    case 4: return p < 0.5 ? 1 : -1;                // square
+    case 5: {                                       // random, stepped
+      const steps = Math.max(4, Math.ceil(cycles));
+      return (lfoHash(Math.floor(u * steps)) & 0xFFFF) / 32767.5 - 1;
+    }
+    default: return Math.sin(6.2831853 * p);        // sine
+  }
+}
+
+// TRIG (0..1): the width of ONE cycle of this rate - the one shot fires once,
+// then the rest of the row is the flat line it leaves behind, so the rate knob
+// still changes the picture with TRIG selected.
+const lfoTrigSpan = (v) => {
+  const c = lfoCycles(v);
+  return 1 / (c < 1 ? 1 : c);
+};
+
+// the row's value at u with the sync mode applied (Screen.h's lfoSyncedWave)
+function lfoSyncedWave(u, rate, shape, sync) {
+  const sy = lfoSyncIdx(sync);
+  const sh = lfoShapeIdx(shape);
+  if (sy === 1) return lfoWave(u, Math.max(1, Math.round(lfoCycles(rate))), sh);
+  if (sy === 2) {
+    const span = lfoTrigSpan(rate);
+    if (u > span) return 0;
+    return lfoWave(u / span, 1, sh);
+  }
+  return lfoWave(u, lfoCycles(rate), sh);
+}
+
+const LFO_SHAPE_NAMES = ["SINE", "TRI", "RISE", "FALL", "SQUARE", "RANDOM"];
+const LFO_SYNC_NAMES = ["HZ", "BEAT", "TRIG"];
+const LFO_CAPS = ["DEPTH", "RATE", "SHAPE", "SYNC"];
+
+const lfoCanvas = document.getElementById("lfoRow");
+const lfoCtx = lfoCanvas.getContext("2d");
+const lfo = { depth: 96, rate: 48, shape: 0, sync: 0, bounds: false, grid: true };
+
+function lfoText() {
+  const hz = lfoRateHz(lfo.rate);
+  return [
+    Math.trunc((clamp7(lfo.depth) * 100) / 127) + "%",
+    (hz < 1 ? hz.toFixed(2) : hz.toFixed(1)) + "HZ",
+    LFO_SHAPE_NAMES[lfoShapeIdx(lfo.shape)],
+    LFO_SYNC_NAMES[lfoSyncIdx(lfo.sync)],
+  ];
+}
+
+function segLfo(x0, y0, x1, y1) {
+  lfoCtx.fillStyle = COL_ACCENT;
+  lfoCtx.fillRect(x0, y0, 1, 1);
+  const top = Math.min(y0, y1), bot = Math.max(y0, y1);
+  lfoCtx.fillRect(x1, top, 1, bot - top + 1);
+}
+
+// drawFilterSlice() + drawLfoSlice(): the filter on the left, the still
+// waveform on the right with its four values under the half
+function drawLfo() {
+  lfoCtx.fillStyle = COL_BG;
+  lfoCtx.fillRect(0, 0, PANEL_W, CELL_H);
+  if (lfo.grid) {
+    lfoCtx.fillStyle = COL_GRID;
+    lfoCtx.fillRect(0, 0, PANEL_W, 1);
+  }
+
+  // left half: the same LPF24 as the envelope view, no readout
+  let prevX = 0, prevY = ENV_TOP + ENV_H - 1, joined = false;
+  for (let column = 0; column < ENV_FLT_END; column++) {
+    const lvl = filterLevel(column / (ENV_FLT_END - 1), state.cutoff, state.res);
+    if (lvl < 0.015) {
+      joined = false;
+      continue;
+    }
+    const py = ENV_TOP + Math.round((1.0 - lvl) * (ENV_H - 1));
+    if (joined) segLfo(prevX, prevY, column, py);
+    prevX = column;
+    prevY = py;
+    joined = true;
+  }
+
+  // right half: the LFO across 240..479
+  const shape = lfoShapeIdx(lfo.shape);
+  const sync = lfoSyncIdx(lfo.sync);
+  const cycles = Math.max(1, Math.round(lfoCycles(lfo.rate)));
+
+  const amp = (clamp7(lfo.depth) / 127) * Math.trunc((ENV_H - 1) / 2);
+  const mid = ENV_TOP + Math.trunc((ENV_H - 1) / 2);
+  const lfoW = PANEL_W - ENV_ENV_X;               // 240
+  const text = lfoText();
+
+  lfoCtx.fillStyle = COL_GRID;                    // the zero line
+  lfoCtx.fillRect(ENV_ENV_X, mid, lfoW, 1);
+
+  if (sync === 1) {                               // beat boundaries
+    for (let c = 1; c < cycles; c++) {
+      const tx = ENV_ENV_X + Math.round((c / cycles) * (lfoW - 1));
+      lfoCtx.fillStyle = COL_GRID;
+      lfoCtx.fillRect(tx, ENV_TOP, 1, ENV_H);
+    }
+  } else if (sync === 2) {                        // where the one shot ended
+    const tx = ENV_ENV_X + Math.round(lfoTrigSpan(lfo.rate) * (lfoW - 1));
+    lfoCtx.fillStyle = COL_GRID;
+    lfoCtx.fillRect(tx, ENV_TOP, 1, ENV_H);
+  }
+
+  prevX = ENV_ENV_X;
+  prevY = mid;
+  joined = false;
+  for (let column = ENV_ENV_X; column < PANEL_W; column++) {
+    const w = lfoSyncedWave((column - ENV_ENV_X) / (lfoW - 1), lfo.rate, lfo.shape,
+                            lfo.sync);
+    const py = mid - Math.round(w * amp);
+    if (joined) segLfo(prevX, prevY, column, py);
+    prevX = column;
+    prevY = py;
+    joined = true;
+  }
+
+  // its four values on ONE line: caption left, value right, in 90 px slots that
+  // start at the ENC2 column and run to the row's edge - the band under the
+  // filter's tail, which the curve never reaches
+  lfoCtx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+  lfoCtx.textBaseline = "top";
+  for (let k = 0; k < 4; k++) {
+    const cx = LFO_READ_X + k * LFO_SLOT_W + 4;
+    const cw = LFO_SLOT_W - 8;
+    lfoCtx.textAlign = "left";
+    lfoCtx.fillStyle = COL_DIM;
+    lfoCtx.fillText(LFO_CAPS[k], cx, LFO_READ_Y);
+    lfoCtx.textAlign = "right";
+    lfoCtx.fillStyle = COL_TEXT;
+    lfoCtx.fillText(text[k], cx + cw, LFO_READ_Y);
+  }
+  lfoCtx.textAlign = "left";
+
+  if (lfo.bounds) {
+    lfoCtx.save();
+    lfoCtx.setLineDash([2, 2]);
+    lfoCtx.strokeStyle = "#3a444d";
+    for (const bx of [120, 240, 360]) {
+      lfoCtx.beginPath();
+      lfoCtx.moveTo(bx + 0.5, 0);
+      lfoCtx.lineTo(bx + 0.5, CELL_H);
+      lfoCtx.stroke();
+    }
+    lfoCtx.restore();
+  }
+}
+
+const LFO_CONTROLS = [
+  { label: "depth", key: "depth" },
+  { label: "rate",  key: "rate" },
+  { label: "shape", key: "shape" },
+  { label: "sync",  key: "sync" },
+];
+const lfoControlsEl = document.getElementById("lfoControls");
+const lfoInputs = [];
+const lfoOuts = [];
+
+LFO_CONTROLS.forEach((def, i) => {
+  const row = document.createElement("div");
+  row.className = "ctl";
+
+  const name = document.createElement("span");
+  name.textContent = def.label;
+
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = 0;
+  input.max = 127;
+  input.step = 1;
+  input.value = lfo[def.key];
+
+  const out = document.createElement("output");
+  out.textContent = lfoText()[i];
+
+  input.addEventListener("input", () => {
+    lfo[def.key] = Number(input.value);
+    out.textContent = lfoText()[i];
+    drawLfo();
+  });
+
+  lfoInputs[i] = input;
+  lfoOuts[i] = out;
+  row.append(name, input, out);
+  lfoControlsEl.append(row);
+});
+
+// for the numeric check in the console: the same helpers the drawing uses
+window.__lfo = lfo;
+window.__lfoMath = { lfoCycles, lfoRateHz, lfoShapeIdx, lfoSyncIdx, lfoWave, lfoTrigSpan,
+                     lfoSyncedWave, lfoText };
+window.drawLfo = drawLfo;
+
+drawLfo();
+</script>
+</body>
+</html>

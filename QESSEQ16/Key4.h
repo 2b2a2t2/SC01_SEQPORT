@@ -185,10 +185,26 @@ int  k4HarmStepChord(uint8_t step, uint8_t *notes);  // the chord HARM infers
                                 // returns note count (0 = nothing to record)
 uint8_t k4HarmLiveChord(uint8_t note, uint8_t *out);  // LIVE follow: one
                                 // feeder note that actually PLAYED (post-
-                                // probability) -> the plain root-position triad
-                                // of its nearest scale degree, bake register;
-                                // playback re-derives each active HARM step
-                                // from it while FOLLOW is on (returns count)
+                                // probability) -> the chord of its nearest
+                                // scale degree in the bake register, voiced
+                                // with the F2 settings; playback re-derives
+                                // each active HARM step from it while FOLLOW
+                                // is on (returns count)
+// --- HARM F2 voicing bank (M2 page, F2 armed): fixed choices that shape
+// every chord HARM builds - the bake, the auto re-bake, step activation and
+// live follow all read them.  RAM-only like SRC/HOLD; 4 counts = 1 step,
+// clamped, no wrap
+void        k4HarmShapeAdjust(int16_t counts);  // 0 close / 1 open / 2 drop
+const char* k4HarmShapeName();                  // "Close"/"Open"/"Drop"
+void        k4HarmSizeAdjust(int16_t counts);   // 0 triad / 1 7th / 2 9th
+const char* k4HarmSizeName();                   // "Triad"/"7th"/"9th"
+void        k4HarmSpreadAdjust(int16_t counts); // 0..3 octaves above the bass
+uint8_t     k4HarmSpread();
+void        k4HarmInvAdjust(int16_t counts);    // 0 as-shaped / 1..3 = 3rd/
+const char* k4HarmInvName();                    // "Nat"/"1st"/"2nd"/"3rd"
+int         k4HarmRevoice();                    // live re-voice the stored
+                                // steps with the current settings (one undo
+                                // slot per tweak burst; returns steps written)
 int  k4Undo();                  // M3 hold: restore the last snapshot
 void k4Stop();                  // leaving KEYMODE4
 void k4Enter();                 // entering: seed from the engine's chord

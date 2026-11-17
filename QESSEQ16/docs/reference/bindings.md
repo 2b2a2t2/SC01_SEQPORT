@@ -46,7 +46,7 @@ In ENCMODE, `ENC5–8` print the live CC number of the armed bank: `CC1–CC4` i
 |---|---|---|
 | **SEQ ROT** | `PREV` held (any SEQ variant) | SHIFT · TRANS · KLOCK · -- · -- · -- · -- · -- |
 | **SEQ STEP** | a step pad held (non-DRUM) | TRANS · -- · -- · -- · -- · -- · -- · -- |
-| **SEQ SKANK STEP** | a step held on POLY + SKANK | TES · MOT · SHP · THN · EXT · SUB · TES% · TRANS |
+| **SEQ SKANK STEP** | a step held with the M2 SKANK page open | TES · MOT · SHP · THN · EXT · SUB · TES% · TRANS |
 | **SEQ BAR** | a C–F bar pad held (SEQ 3 keyboard row) | OCT · TRANS · -- · -- · -- · -- · -- · -- |
 | **KEY 2 PREV** | `PREV` held in KEY 2 | OCT · SCALE · KEY · LATCH · KLOCK · PERF · -- · -- |
 | **KEY 4 PREV** | `PREV` held in KEY 4 | OCT · SCALE · KEY · FSCALE · SUB · INV · PAS · COL |

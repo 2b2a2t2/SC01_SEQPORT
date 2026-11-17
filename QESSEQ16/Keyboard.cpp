@@ -1448,6 +1448,60 @@ bool stepChordSame(uint8_t step, const uint8_t *notes, uint8_t n) {
   return true;
 }
 
+// stepChordWrite without the attribute wipe: a live re-voice (the HARM F2
+// voicing knobs) changes only the pitches, so the step's att/FX/EMB, the
+// per-step TRANS and BASS/SKANK modifiers, the drum masks and ratchet
+// counts are snapshotted around the write and put back - only the per-note
+// strum onsets and layer tags are trimmed to the new note count (SIZE can
+// grow or shrink the stack; a tag past the end would go stale).  M3 hold
+// still restores everything: the burst snapshot was taken before the first
+// write of the tweak
+int stepChordWriteKeepAtt(uint8_t step, const uint8_t *notes, uint8_t n) {
+  if (step >= STEP_MAX) return -1;
+  uint8_t ch = seqEditCh;
+  uint8_t att = stepAtt[ch][step];
+  uint8_t fx = stepFx[ch][step];
+  uint8_t emb[4];
+  for (uint8_t i = 0; i < 4; i++) emb[i] = stepEmb[ch][step][i];
+  uint16_t da = drumAccent[ch][step];
+  uint16_t dp = drumProbOn[ch][step];
+  uint8_t rat[8];
+  memcpy(rat, stepRatchet[ch][step], sizeof(rat));
+  int8_t  oct = stepOctM[ch][step];
+  uint8_t brw = stepBrwM[ch][step];
+  uint8_t mdp = stepModP[ch][step];
+  int8_t  tr  = stepTrM[ch][step];
+  uint8_t sk[7];
+  for (uint8_t i = 0; i < 7; i++) sk[i] = stepSkankM[ch][step][i];
+  uint16_t sd[CHORD_MAX];
+  uint8_t  lay[CHORD_MAX];
+  for (uint8_t i = 0; i < CHORD_MAX; i++) {
+    sd[i] = stepStrumDt[ch][step][i];
+    lay[i] = stepLay[ch][step][i];
+  }
+
+  int w = stepChordWrite(step, notes, n);
+  if (w < 0) return w;
+
+  stepAtt[ch][step] = att;
+  stepFx[ch][step] = fx;
+  for (uint8_t i = 0; i < 4; i++) stepEmb[ch][step][i] = emb[i];
+  drumAccent[ch][step] = da;
+  drumProbOn[ch][step] = dp;
+  memcpy(stepRatchet[ch][step], rat, sizeof(rat));
+  stepOctM[ch][step] = oct;
+  stepBrwM[ch][step] = brw;
+  stepModP[ch][step] = mdp;
+  stepTrM[ch][step] = tr;
+  for (uint8_t i = 0; i < 7; i++) stepSkankM[ch][step][i] = sk[i];
+  uint8_t keep = (n < CHORD_MAX) ? n : CHORD_MAX;
+  for (uint8_t i = 0; i < CHORD_MAX; i++) {
+    stepStrumDt[ch][step][i] = (i < keep) ? sd[i] : 0;
+    stepLay[ch][step][i]     = (i < keep) ? lay[i] : 0;
+  }
+  return w;
+}
+
 const uint8_t* stepChordAt(uint8_t step, uint8_t *len) {
   if (step >= STEP_MAX || len == 0) { if (len) *len = 0; return stepChord[0][0]; }
   *len = stepChordLen[seqEditCh][step];

@@ -82,6 +82,13 @@ static const char* ctrlLegend(uint8_t i) {
       static const char* gn[4] = { "OPTS", "OCT", "BRW", "PROB" };
       return gn[i - 5];
     }
+    // SEQMODE + HARM page (open with M2 on a POLY HARM track): F1 = the
+    // base row (GENRE/FILL/SRC/HOLD), F2 = the voicing bank (SHAPE/SIZE/
+    // VOICE/INV), F3/F4 reserved - wins over the step-edit legend
+    if (harmPageActive()) {
+      static const char* hn[4] = { "BASE", "CHRD", "---", "---" };
+      return hn[i - 5];
+    }
     // SEQMODE + MONO step-edit: F1-F4 select TIE/GLIDE/ACCENT/PROB
     if (modeBase == MODE_SEQ && modeVariant != 3 &&
         seqTrack() == SEQ_TRACK_MONO) {
@@ -202,11 +209,16 @@ static void writeLegends() {
   uint8_t wantF = 0;
   if (modeBase == MODE_ENC && modeVariant != 3 && !abltOn()) {
     wantF = (uint8_t)(encBank() + 1);             // F1..F4 = the CC bank
+    if (modeVariant == 4 && encFlavorHeld() < 4)
+      wantF = (uint8_t)(encFlavorHeld() + 1);     // the bank under the finger
   } else if (arpPageActive()) {
     const uint8_t s = arpOptionSel();
     if (s < 4) wantF = (uint8_t)(s + 1);
   } else if (genPageActive()) {
     const uint8_t s = genOptionSel();
+    if (s < 4) wantF = (uint8_t)(s + 1);
+  } else if (harmPageActive()) {
+    const uint8_t s = harmSetSelGet();
     if (s < 4) wantF = (uint8_t)(s + 1);
   } else if (k4m && k4Tonality()) {
     wantF = (uint8_t)(k4TonaBank() + 1);          // the open TONALITY bank
@@ -318,14 +330,88 @@ void refreshMainScreen() {
   // pointer across the rim and the value inside it, with the CC number in the
   // ring's bottom notch.  The control legend stays: the OLED dropped it
   // because 128 px had no room under eight dials, the panel has a band of
-  // its own for it
+  // its own for it.
+  //
+  // The second row is drawn in the ARMED F bank's FLAVOR on every ENCMODE page
+  // - dials as above, level bars, or one ADSR curve across the four cells.
+  // The flavor belongs to the bank, not to variant 4: clicking back from
+  // ENCMODE4 to ENCMODE must keep the row you set under the hold instead of
+  // dropping it to dials (only ENCMODE3, the channel picker, has its own
+  // screen).  While an F pad is HELD in ENCMODE4 it previews that bank's
+  // numbers and hands ENC1 to the FLAVOR knob
   if (modeBase == MODE_ENC && modeVariant != 3) {
+    const uint8_t held = (modeVariant == 4) ? encFlavorHeld() : 0xFF;
+    const bool menu = (held < 4);
+    const uint8_t bank = menu ? held : encBank();
     char ccLab[8];
+
     for (uint8_t c = 0; c < 4; c++) {
-      snprintf(ccLab, sizeof(ccLab), "CC%u", encCcNum(c));
-      scrDial(c, ccLab, encCcValue(c));
-      snprintf(ccLab, sizeof(ccLab), "CC%u", encCcNum((uint8_t)(4 + c)));
-      scrDial((uint8_t)(4 + c), ccLab, encCcValue((uint8_t)(4 + c)));
+      if (menu && c == 0) {
+        scrCellLabel(0, "FLAVOR");          // the menu's own knob, not a CC
+        scrCellValue(0, encFlavorName(encFlavorOf(bank)));
+        continue;
+      }
+      const uint8_t cc = menu ? encCcNumIn(c, bank) : encCcNum(c);
+      snprintf(ccLab, sizeof(ccLab), "CC%u", cc);
+      scrDial(c, ccLab, menu ? encCcAt(cc) : encCcValue(c));
+    }
+
+    // the armed bank's flavor, on ENCMODE 1, 2 and 4 alike - the hold below
+    // only decides WHICH bank that is (the one under the finger, in 4)
+    const uint8_t flavor = encFlavorOf(bank);
+    if (flavor == ENC_FLAVOR_ENV) {
+      // the row splits in two: the filter (cutoff / resonance - ENC1 / ENC2's
+      // CCs) on the left, the ADSR of ENC5..8 on the right
+      // the four stage names, not the CC numbers: this row is the envelope,
+      // and the chips above it already carry the CCs
+      static const char* const stageCap[4] = { "A", "D", "S", "R" };
+      const char* capPtr[4];
+      uint8_t vals[4];
+      for (uint8_t k = 0; k < 4; k++) {
+        const uint8_t cc = menu ? encCcNumIn((uint8_t)(4 + k), bank)
+                                : encCcNum((uint8_t)(4 + k));
+        capPtr[k] = stageCap[k];
+        vals[k] = menu ? encCcAt(cc) : encCcValue((uint8_t)(4 + k));
+      }
+      scrEnvRow(capPtr, vals, encCcValue(0), encCcValue(1));
+    } else if (flavor == ENC_FLAVOR_LFO) {
+      // the LFO row, laid out like the envelope row: the filter (ENC1/ENC2's
+      // CCs) on the left, then the waveform with what the four values mean -
+      // DEPTH 0..100%, RATE 0.01..10 Hz, SHAPE, SYNC - instead of the raw
+      // 0..127 the dials above them carry
+      static const char* const lfoCap[4] = { "DEPTH", "RATE", "SHAPE", "SYNC" };
+      static const char* const shapeName[LFO_SHAPES] = {
+        "SINE", "TRI", "RISE", "FALL", "SQUARE", "RANDOM" };
+      static const char* const syncName[LFO_SYNCS] = { "HZ", "BEAT", "TRIG" };
+      const char* vals[4];
+      char txt[4][12];
+      uint8_t raw[4];
+      for (uint8_t k = 0; k < 4; k++) {
+        const uint8_t cc = menu ? encCcNumIn((uint8_t)(4 + k), bank)
+                                : encCcNum((uint8_t)(4 + k));
+        raw[k] = menu ? encCcAt(cc) : encCcValue((uint8_t)(4 + k));
+      }
+      snprintf(txt[0], sizeof(txt[0]), "%u%%",
+               (unsigned)((uint16_t)raw[0] * 100 / 127));
+      // the rate keeps two decimals under 1 Hz and one above it, so the whole
+      // value fits the 52 px readout column ("0.01HZ" .. "10.0HZ")
+      const float hz = lfoRateHz(raw[1]);
+      if (hz < 1.0f) snprintf(txt[1], sizeof(txt[1]), "%.2fHZ", (double)hz);
+      else snprintf(txt[1], sizeof(txt[1]), "%.1fHZ", (double)hz);
+      snprintf(txt[2], sizeof(txt[2]), "%s", shapeName[lfoShape(raw[2])]);
+      snprintf(txt[3], sizeof(txt[3]), "%s", syncName[lfoSync(raw[3])]);
+      for (uint8_t k = 0; k < 4; k++) vals[k] = txt[k];
+      scrLfoRow(lfoCap, vals, raw[0], raw[1], raw[2], raw[3],
+                encCcValue(0), encCcValue(1));
+    } else {
+      for (uint8_t k = 0; k < 4; k++) {
+        const uint8_t cc = menu ? encCcNumIn((uint8_t)(4 + k), bank)
+                                : encCcNum((uint8_t)(4 + k));
+        snprintf(ccLab, sizeof(ccLab), "CC%u", cc);
+        const uint8_t v = menu ? encCcAt(cc) : encCcValue((uint8_t)(4 + k));
+        if (flavor == ENC_FLAVOR_BARS) scrCellBar((uint8_t)(4 + k), ccLab, v);
+        else scrDial((uint8_t)(4 + k), ccLab, v);
+      }
     }
     writeLegends();
     return;
@@ -364,8 +450,8 @@ void refreshMainScreen() {
   // page, regrouped by the armed F set (0xFF = the base row)
   bool drumP = drumPageActive();
   uint8_t drumSet = drumSetSelGet();
-  // ...or a held step on a POLY+SKANK track arms the per-step lock row
-  // (encoders 1..6 override that step's knob, 8 = TRANS)
+  // ...or a held step with the M2 SKANK page open arms the per-step lock
+  // row (encoders 1..7 override that step's knob, 8 = TRANS)
   bool skankStepOv = (b.enc == ENC_SEQ_SKANK_STEP);
   // ...and with PREV held the SHIFT/TRANS row takes the encoders (ENC1 =
   // rotate, ENC2 = semitone transpose).  The BASS page reuses this same
@@ -427,8 +513,13 @@ void refreshMainScreen() {
       l1 = ll[c];
     }
     if (harmP && !seqOv) {
-      static const char *hl[4] = { "GENRE", "FILL", "SRC", "HOLD" };
-      l1 = hl[c];
+      if (harmSetSelGet() == 1) {          // F2: the voicing bank owns row 1
+        static const char *hv[4] = { "SHAPE", "SIZE", "VOICE", "INV" };
+        l1 = hv[c];
+      } else {
+        static const char *hl[4] = { "GENRE", "FILL", "SRC", "HOLD" };
+        l1 = hl[c];
+      }
     }
     if (drumP && !seqOv) {
       // base row: GENRE / VAR / FILL / MOT, then the four lane selectors on
@@ -627,14 +718,26 @@ void refreshMainScreen() {
       snprintf(val, sizeof(val), "%uoct",
                seqGenRangeOf(leadSeq));                       // ENC4 = RANGE
     } else if (harmP && c == 0) {
-      snprintf(val, sizeof(val), "%s", k4GenreShort());       // ENC1 = genre
+      if (harmSetSelGet() == 1)
+        snprintf(val, sizeof(val), "%s", k4HarmShapeName());  // ENC1 = shape
+      else
+        snprintf(val, sizeof(val), "%s", k4GenreShort());     // ENC1 = genre
     } else if (harmP && c == 1) {
-      snprintf(val, sizeof(val), "%u%%",
-               seqGenFillOf((uint8_t)(seqEditChannel() - 1))); // ENC2 = fill
+      if (harmSetSelGet() == 1)
+        snprintf(val, sizeof(val), "%s", k4HarmSizeName());   // ENC2 = size
+      else
+        snprintf(val, sizeof(val), "%u%%",
+                 seqGenFillOf((uint8_t)(seqEditChannel() - 1))); // ENC2 = fill
     } else if (harmP && c == 2) {
-      snprintf(val, sizeof(val), "%s", k4HarmInputName());    // ENC3 = src
+      if (harmSetSelGet() == 1)
+        snprintf(val, sizeof(val), "%uoct", k4HarmSpread());  // ENC3 = voice
+      else
+        snprintf(val, sizeof(val), "%s", k4HarmInputName());  // ENC3 = src
     } else if (harmP && c == 3) {
-      snprintf(val, sizeof(val), "%s", k4HarmHoldName());     // ENC4 = hold
+      if (harmSetSelGet() == 1)
+        snprintf(val, sizeof(val), "%s", k4HarmInvName());    // ENC4 = inv
+      else
+        snprintf(val, sizeof(val), "%s", k4HarmHoldName());   // ENC4 = hold
     } else if (compP && c == 0) {
       int h = seqCompHits();                                  // ENC1 = hits
       if (h <= 1) snprintf(val, sizeof(val), "off");
@@ -966,6 +1069,7 @@ void drawHeaderText() {
   const char* left = headerLeft;
   // ENCABLETONMODE names the Live track it is bound to in the left slot
   char liveLeft[22];
+  char flavorLeft[16];   // ENCMODE4: which bank's FLAVOR menu is up
   if (abltOn() && modeBase == MODE_ENC) {
     if (linkTrackName()[0]) {
       snprintf(liveLeft, sizeof(liveLeft), "LIVE %.12s", linkTrackName());
@@ -978,6 +1082,10 @@ void drawHeaderText() {
     left = "DEVICE SETTINGS";    // the header tap opened the settings page
   } else if (ccCfgActive()) {
     left = "CC CONFIG";          // PREV in ENCMODE: what each knob sends
+  } else if (modeBase == MODE_ENC && modeVariant == 4 && encFlavorHeld() < 4) {
+    snprintf(flavorLeft, sizeof(flavorLeft), "F%u FLAVOR",
+             (unsigned)(encFlavorHeld() + 1));
+    left = flavorLeft;
   } else if (drumPageActive()) {
     left = "DRUM PATTERN";       // the drum pattern page owns the row
   } else if (genPageActive()) {

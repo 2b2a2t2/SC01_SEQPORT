@@ -440,6 +440,12 @@ void stepAssignSet(int8_t step);     // step = 0..63 to arm, -1 to disarm
 // live gesture) and a one-level undo of the last write batch
 int            stepChordWrite(uint8_t step, const uint8_t *notes, uint8_t n);
                                                            // stored n, -1 = bad
+int            stepChordWriteKeepAtt(uint8_t step, const uint8_t *notes,
+                                     uint8_t n);  // like stepChordWrite, but the
+                                                  // step's attributes (att/FX/
+                                                  // EMB/TRANS/mods/masks) stay:
+                                                  // a live re-voice moves only
+                                                  // the pitches
 const uint8_t* stepChordAt(uint8_t step, uint8_t *len);    // stored chord (edit seq)
 // HARM (Key4.cpp reads the feeder bassline): the input channel the edit
 // channel follows (1-based, 0 = none/self) and a channel-targeted step
@@ -506,10 +512,10 @@ int8_t   seqBarOctAt(uint8_t bar);
 int8_t   seqBarTrAt(uint8_t bar);
 int8_t   seqBarOctAdjust(int16_t counts);
 int8_t   seqBarTrAdjust(int16_t counts);
-// per-step SKANK locks (hold a step on a POLY+SKANK track = the lock row,
-// encoders 1..6): value 0..100 or -1 = inherit the track's page knob.
-// Stored with the step content (stepAttClear wipes them), RAM only like
-// every step field
+// per-step SKANK locks (hold a step while the M2 SKANK page is open = the
+// lock row, encoders 1..7): value 0..100 or -1 = inherit the track's page
+// knob.  Stored with the step content (stepAttClear wipes them), RAM only
+// like every step field
 int16_t  stepSkankLockAt(uint8_t step, uint8_t idx);
 void     stepSkankLockSet(uint8_t step, uint8_t idx, int16_t v);
 

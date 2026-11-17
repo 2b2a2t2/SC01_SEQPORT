@@ -84,6 +84,7 @@ number must stay in CC 1–36 (the size of the per-CC-per-channel value store).
 | Tap **M3** | Generate (page open) / re-roll (drum page) / page group (ENCMODE) |
 | Hold **M3** | Undo one level (generators, drum page) |
 | Hold **PREV** | Swap the encoder row to SHIFT / TRANS |
+| Hold **F1–F4** in ENCMODE4 | That bank's row `FLAVOR` on **ENC1**: DIALS / BARS / ENVELOPE / LFO — each F bank keeps its own, LPF24 filter on the left, ADSR on the right, or, split like the envelope row (filter left, waveform right), a still LFO waveform with its values on one line under it (ENC5 depth, ENC6 rate, ENC7 shape, ENC8 sync — TRIG's one shot is as wide as one cycle of the rate) (drawing only; the armed bank's flavor is drawn on ENCMODE 1/2/4 too, not just 4) |
 | Tap **PREV** in ENCMODE | `CC CONFIG` page: the eight knobs' CC numbers, live with the F bank and M3 group |
 | Hold **M1** on a DRUM track | Orange part-select overlay |
 | **REC** in SEQ 4 / ENC 4 | Save per-channel memory / all CC values to EEPROM |
