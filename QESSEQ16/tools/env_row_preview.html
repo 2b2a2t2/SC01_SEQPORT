@@ -60,8 +60,8 @@
 </div>
 
 <div class="legend">
-  <b>left</b> filter: 0&ndash;190 px shelf / bump / cliff, no readout &nbsp;&middot;&nbsp;
-  <b>gap</b> 190&ndash;239 px blank &nbsp;&middot;&nbsp;
+  <b>left</b> filter: framed in ENC1's 120 &times; 75 cell &mdash; passband / resonance peak / dB fall, no readout &nbsp;&middot;&nbsp;
+  <b>gap</b> 120&ndash;239 px blank &nbsp;&middot;&nbsp;
   <b>right</b> ADSR: 240&ndash;479 px, four 60 px slots with A / D / S / R bars
 </div>
 
@@ -84,8 +84,8 @@
 <div class="controls" id="lfoControls"></div>
 
 <div class="legend">
-  <b>left</b> filter: 0&ndash;190 px, no readout &nbsp;&middot;&nbsp;
-  <b>gap</b> 190&ndash;239 px blank &nbsp;&middot;&nbsp;
+  <b>left</b> filter: framed in ENC1's cell, no readout &nbsp;&middot;&nbsp;
+  <b>gap</b> 120&ndash;239 px blank &nbsp;&middot;&nbsp;
   <b>right</b> LFO: 240&ndash;479 px &nbsp;&middot;&nbsp;
   <b>readouts</b> 120&ndash;479 px, one line, four 90 px slots (DEPTH / RATE / SHAPE / SYNC)
 </div>
@@ -106,11 +106,18 @@ const ENV_BAR_H = 6;
 const ENV_CAP_Y = ENV_BAR_Y + ENV_BAR_H + 2; // 56
 const ENV_HALF_W = PANEL_W / 2;             // 240
 const ENV_SLOT_W = ENV_HALF_W / 4;          // 60
-const ENV_GAP    = 50;
-const ENV_FLT_END = ENV_HALF_W - ENV_GAP;   // 190
+const ENV_FLT_BOX_X = 2;                    // the filter's rectangle: ENC1's cell
+const ENV_FLT_BOX_Y = 2;
+const ENV_FLT_BOX_W = CELL_W - 4;           // 116
+const ENV_FLT_BOX_H = CELL_H - 4;           // 71
+const ENV_FLT_PAD   = 4;                    // air between frame and curve
+const ENV_FLT_PLOT_X = ENV_FLT_BOX_X + ENV_FLT_PAD;        // 6
+const ENV_FLT_PLOT_Y = ENV_FLT_BOX_Y + ENV_FLT_PAD;        // 6
+const ENV_FLT_PLOT_W = ENV_FLT_BOX_W - 2 * ENV_FLT_PAD;    // 108
+const ENV_FLT_PLOT_H = ENV_FLT_BOX_H - 2 * ENV_FLT_PAD;    // 63
 const ENV_ENV_X   = ENV_HALF_W;             // 240
-const LFO_READ_X  = PANEL_W / 4;            // 120: the readout line starts under ENC2
-const LFO_SLOT_W  = (PANEL_W - LFO_READ_X) / 4; // 90: one readout
+const LFO_READ_R  = PANEL_W - 4;            // 476: the right-aligned end of the readouts
+const LFO_READ_GAP = 14;                    // air between "CAP: value" pairs
 const LFO_READ_Y  = ENV_CAP_Y;              // 56: the ADSR's caption line
 
 /* COL_* are RGB565 in the firmware; these are their 8-bit equivalents */
@@ -135,7 +142,7 @@ function expFall(u) {
 const ENV_EDGE = 0.88;   // the envelope never reaches past this
 
 function envSegments(v) {
-  const a = 0.05 + 0.30 * (v[0] / 127.0);            // attack end
+  const a = 0.005 + 0.30 * (v[0] / 127.0);           // 0 = instant jump
   const d = 0.04 + 0.16 * (v[1] / 127.0);            // decay length
   const decayEnd = a + d;
 
@@ -161,22 +168,35 @@ function envLevel(x, v) {
   return -1.0;                                       // past the release
 }
 
+// the filter curve's vertical scale, in dB: passband at 0 dB, the peak at
+// DB_PEAK, band ending DB_BOT below it. The window is symmetric (+/-32 dB) so
+// the passband sits on the frame's middle row; the peak keeps its headroom
+const FLT_DB_TOP = 32.0;
+const FLT_DB_PEAK = 20.0;
+const FLT_DB_BOT = -32.0;
+const FLT_DB_PER_DEC = 50.0;
+const FLT_DB_KNEE = 0.16;
+
 function filterLevel(f, cutoff, res) {
   // x axis is LOG frequency: three decades across the half, corner in decades
   const dec = f * 3.0;
-  const f0 = 0.25 + 2.10 * (cutoff / 127.0);
+  const f0 = 0.18 + 1.60 * (cutoff / 127.0);
   const r = res / 127.0;
-  const dd = dec - f0;
-  const x = Math.pow(10.0, Math.min(dd, 0.3));            // f / f0
-  const x8 = x * x * x * x * x * x * x * x;
-  const x16 = x8 * x8;
-  const mag = 1.0 / Math.sqrt(1.0 + x16 * x16 * x16);     // brick wall
-  // bump is asymmetric: wide shoulder before the corner, narrow after it
-  const width = dd < 0 ? (0.10 + 0.08 * r) : (0.03 + 0.02 * r);
-  const d = dd / width;
-  let lvl = 0.55 * mag + 0.42 * r * Math.exp(-d * d);
-  if (lvl > 0.97) lvl = 0.97;
-  return lvl;
+  const d = dec - f0;
+  // resonance peak is wider below the corner than above it
+  const w = d < 0 ? (0.24 + 0.14 * r) : (0.18 + 0.10 * r);
+  const u = d / w;
+  // the soft knee takes ~5 dB at the corner, so the bump is an absolute height
+  // that stays clear of the band's top whatever the headroom is set to
+  const peak = FLT_DB_PEAK * r * Math.exp(-u * u);
+  // dB, so the roll-off falls instead of flattening along the floor - and a
+  // soft knee instead of max(d, 0), so the passband bends into the fall
+  // rather than meeting it at a corner
+  const v = d / FLT_DB_KNEE;
+  const knee = v > 30 ? d : FLT_DB_KNEE * Math.log(1 + Math.exp(v));
+  const db = peak - FLT_DB_PER_DEC * knee;
+  const lvl = (db - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  return lvl > 1.0 ? 1.0 : lvl;
 }
 
 /* ------------------------------------------------------------------ */
@@ -222,8 +242,42 @@ function envReadout(x, y, w, cap, v) {
   ctx.textAlign = "left";
 }
 
+// drawFilterBox(): the filter graph in ENC1's cell - a rectangle the size of
+// the container with the curve inset inside it, shared by both views
+function drawFilterBox(g, segFn) {
+  g.strokeStyle = COL_GRID;
+  g.lineWidth = 1;
+  g.strokeRect(ENV_FLT_BOX_X + 0.5, ENV_FLT_BOX_Y + 0.5,
+               ENV_FLT_BOX_W - 1, ENV_FLT_BOX_H - 1);
+
+  let prevX = ENV_FLT_PLOT_X;
+  let prevY = ENV_FLT_PLOT_Y + ENV_FLT_PLOT_H - 1;
+  let joined = false;
+  for (let k = 0; k < ENV_FLT_PLOT_W; k++) {
+    const lvl = filterLevel(k / (ENV_FLT_PLOT_W - 1), state.cutoff, state.res);
+    // the response has left the bottom of its band: end the curve there
+    // instead of trailing a flat line along the floor
+    if (lvl <= 0) {
+      if (joined)
+        segFn(prevX, prevY, ENV_FLT_PLOT_X + k, ENV_FLT_PLOT_Y + ENV_FLT_PLOT_H - 1);
+      break;
+    }
+    const py = ENV_FLT_PLOT_Y + Math.round((1.0 - lvl) * (ENV_FLT_PLOT_H - 1));
+    if (joined) segFn(prevX, prevY, ENV_FLT_PLOT_X + k, py);
+    prevX = ENV_FLT_PLOT_X + k;
+    prevY = py;
+    joined = true;
+  }
+}
+
 // drawEnvSlice(): cell i paints its own 120 px of the shared row
 function drawEnvSlice(i) {
+  if (i === 4) {                    // ENC1's cell: the framed filter graph
+    drawFilterBox(ctx, seg);
+    return;
+  }
+  if (i < 6) return;                // ENC2 / ENC3: nothing in this flavor
+
   const x = (i & 3) * CELL_W;
   const y = 0;
 
@@ -231,29 +285,14 @@ function drawEnvSlice(i) {
   let prevY = y + ENV_TOP + ENV_H - 1;
   let joined = false;
   for (let column = x; column < x + CELL_W; column++) {
-    let py;
-    if (column < ENV_FLT_END) {
-      const f = column / (ENV_FLT_END - 1);
-      const lvl = filterLevel(f, state.cutoff, state.res);
-      // the curve ends on the floor where the response runs out
-      if (lvl < 0.015) {
-        joined = false;
-        continue;
-      }
-      py = y + ENV_TOP + Math.round((1.0 - lvl) * (ENV_H - 1));
-    } else if (column >= ENV_ENV_X) {
-      const t = (column - ENV_ENV_X) / (PANEL_W - ENV_ENV_X - 1);
-      const lvl = envLevel(t, state.adsr);
-      // the envelope ends before the row's right edge: nothing to draw after
-      if (lvl < 0.0) {
-        joined = false;
-        continue;
-      }
-      py = y + ENV_TOP + Math.round((1.0 - lvl) * (ENV_H - 1));
-    } else {
-      joined = false;                 // the gap: draw nothing, join nothing
+    const t = (column - ENV_ENV_X) / (PANEL_W - ENV_ENV_X - 1);
+    const lvl = envLevel(t, state.adsr);
+    // the envelope ends before the row's right edge: nothing to draw after
+    if (lvl < 0.0) {
+      joined = false;
       continue;
     }
+    const py = y + ENV_TOP + Math.round((1.0 - lvl) * (ENV_H - 1));
     if (joined) seg(prevX, prevY, column, py);
     prevX = column;
     prevY = py;
@@ -483,20 +522,8 @@ function drawLfo() {
     lfoCtx.fillRect(0, 0, PANEL_W, 1);
   }
 
-  // left half: the same LPF24 as the envelope view, no readout
-  let prevX = 0, prevY = ENV_TOP + ENV_H - 1, joined = false;
-  for (let column = 0; column < ENV_FLT_END; column++) {
-    const lvl = filterLevel(column / (ENV_FLT_END - 1), state.cutoff, state.res);
-    if (lvl < 0.015) {
-      joined = false;
-      continue;
-    }
-    const py = ENV_TOP + Math.round((1.0 - lvl) * (ENV_H - 1));
-    if (joined) segLfo(prevX, prevY, column, py);
-    prevX = column;
-    prevY = py;
-    joined = true;
-  }
+  // ENC1's column: the same LPF24 as the envelope view, framed in its cell
+  drawFilterBox(lfoCtx, segLfo);
 
   // right half: the LFO across 240..479
   const shape = lfoShapeIdx(lfo.shape);
@@ -523,9 +550,9 @@ function drawLfo() {
     lfoCtx.fillRect(tx, ENV_TOP, 1, ENV_H);
   }
 
-  prevX = ENV_ENV_X;
-  prevY = mid;
-  joined = false;
+  let prevX = ENV_ENV_X;
+  let prevY = mid;
+  let joined = false;
   for (let column = ENV_ENV_X; column < PANEL_W; column++) {
     const w = lfoSyncedWave((column - ENV_ENV_X) / (lfoW - 1), lfo.rate, lfo.shape,
                             lfo.sync);
@@ -536,22 +563,26 @@ function drawLfo() {
     joined = true;
   }
 
-  // its four values on ONE line: caption left, value right, in 90 px slots that
-  // start at the ENC2 column and run to the row's edge - the band under the
-  // filter's tail, which the curve never reaches
+  // its four values on ONE line as "CAP: value", the value right behind its
+  // colon, RIGHT-aligned: the last value ends 4 px from the panel edge and the
+  // pairs run left from it
   lfoCtx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
   lfoCtx.textBaseline = "top";
-  for (let k = 0; k < 4; k++) {
-    const cx = LFO_READ_X + k * LFO_SLOT_W + 4;
-    const cw = LFO_SLOT_W - 8;
-    lfoCtx.textAlign = "left";
-    lfoCtx.fillStyle = COL_DIM;
-    lfoCtx.fillText(LFO_CAPS[k], cx, LFO_READ_Y);
-    lfoCtx.textAlign = "right";
-    lfoCtx.fillStyle = COL_TEXT;
-    lfoCtx.fillText(text[k], cx + cw, LFO_READ_Y);
-  }
   lfoCtx.textAlign = "left";
+  const caps = LFO_CAPS.map((c) => c + ":");
+  const capW = caps.map((c) => Math.ceil(lfoCtx.measureText(c).width) + 4);
+  const valW = text.map((t) => Math.ceil(lfoCtx.measureText(t).width));
+  let span = 3 * LFO_READ_GAP;
+  for (let k = 0; k < 4; k++) span += capW[k] + valW[k];
+  let px0 = LFO_READ_R - span;
+  if (px0 < 2) px0 = 2;
+  for (let k = 0; k < 4; k++) {
+    lfoCtx.fillStyle = COL_DIM;
+    lfoCtx.fillText(caps[k], px0, LFO_READ_Y);
+    lfoCtx.fillStyle = COL_TEXT;
+    lfoCtx.fillText(text[k], px0 + capW[k], LFO_READ_Y);
+    px0 += capW[k] + valW[k] + LFO_READ_GAP;
+  }
 
   if (lfo.bounds) {
     lfoCtx.save();

@@ -84,7 +84,7 @@ number must stay in CC 1–36 (the size of the per-CC-per-channel value store).
 | Tap **M3** | Generate (page open) / re-roll (drum page) / page group (ENCMODE) |
 | Hold **M3** | Undo one level (generators, drum page) |
 | Hold **PREV** | Swap the encoder row to SHIFT / TRANS |
-| Hold **F1–F4** in ENCMODE4 | That bank's row `FLAVOR` on **ENC1**: DIALS / BARS / ENVELOPE / LFO — each F bank keeps its own, LPF24 filter on the left, ADSR on the right, or, split like the envelope row (filter left, waveform right), a still LFO waveform with its values on one line under it (ENC5 depth, ENC6 rate, ENC7 shape, ENC8 sync — TRIG's one shot is as wide as one cycle of the rate) (drawing only; the armed bank's flavor is drawn on ENCMODE 1/2/4 too, not just 4) |
+| Hold **F1–F4** in ENCMODE4 | That bank's row `FLAVOR` on **ENC1**: DIALS / BARS / ENVELOPE / LFO — each F bank keeps its own **per track type** (DRUM / MONO / POLY each remember their own set), the LPF24 filter in a framed rectangle the size of the ENC1 cell, ADSR on the right, or, split like the envelope row (filter left, waveform right), a still LFO waveform with its values on one line under it as `label: value` (ENC5 depth, ENC6 rate, ENC7 shape, ENC8 sync — TRIG's one shot is as wide as one cycle of the rate); the flavor knob steps at the shared list-knob rate (`encStep`: 8 states a turn on the panel's detentless knobs); the **F1–F4 buttons carry each bank's flavor** as their label (`DIAL` / `LEVEL` / `ENV` / `LFO`), the armed one filled (drawing only; the flavors are **stored** when you release the F pad and on ENCMODE4 + REC, and restored at boot; the armed bank's flavor is drawn on ENCMODE 1/2/4 too, not just 4) |
 | Tap **PREV** in ENCMODE | `CC CONFIG` page: the eight knobs' CC numbers, live with the F bank and M3 group |
 | Hold **M1** on a DRUM track | Orange part-select overlay |
 | **REC** in SEQ 4 / ENC 4 | Save per-channel memory / all CC values to EEPROM |
@@ -115,7 +115,11 @@ dark blue empty · dim red armed.
 
 One detent = 4 counts. Wide dials (every 0–100 %, and CC values) move **1 unit per count**,
 so **one detent = 4 %** and a full sweep is about one turn; a fast spin is worth up to 4×
-that. Small enums move **1 step per detent**. **Nothing wraps** — dials stop at both ends.
+that. Small enums and lists (GENRE, SCALE, PHRASE, the ENCMODE row `FLAVOR` …) move **one
+value per `encStep` step**: one detent on the quadrature knobs, and on the panel's detentless
+AS5600 knobs a wider 12-count step (8 values a turn) so a nudge cannot skip the menu.
+Wide stepped ranges (PAT LEN, VEL, the per-step OCT/BRW/PROB) keep 4 counts per value.
+**Nothing wraps** — dials stop at both ends.
 
 ## Pad colours
 

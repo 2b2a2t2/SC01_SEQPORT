@@ -6,6 +6,145 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### `ENVELOPE` / `LFO` filter: framed in its own rectangle
+
+- **The filter graph now sits in a rectangle the size of the `ENC1` cell**: the curve is inset four
+  pixels inside a 116 x 71 frame that fills the container, instead of floating in the row's upper
+  half, so it reads as its own little instrument panel. The plot is taller as a result (63 rows
+  against 48), so the passband, the peak and the fall all gain resolution; the frame keeps its
+  distance from the curve at every cutoff and resonance. The dB window is now symmetric
+  (+32 / -32 dB) instead of +24 / -32, which puts the passband — the flat run the curve starts
+  with on the left — on the frame's **middle row**; it used to sit four rows above centre.
+  A maxed resonance still peaks 16 rows into the plot, well clear of the top edge.
+
+### `LFO` row: readouts flush right, and the filter peak keeps its headroom
+
+- **The `LFO` row's four readouts are right-aligned**: the last value ends 4 px from the panel's
+  right edge and `DEPTH` / `RATE` / `SHAPE` / `SYNC` run left from there, instead of starting under
+  `ENC2` and sliding about whenever a value changed width. Each pair is still `label: value` on one
+  line.
+- **The filter curve sits a little lower, so a maxed resonance is a spike and not a flat top**: the
+  band's headroom above the passband is 24 dB instead of 16, and the peak is a stated 20 dB
+  (`FLT_DB_PEAK`) instead of a multiple of the headroom. At resonance 127 the peak now lands about
+  seven of the band's 48 rows below the top on the panel (and clear of the top row on the OLED)
+  rather than one row under it, where it read as truncated; the passband moved down with it, from
+  row 17 to row 22.
+
+### `ENVELOPE` / `LFO` row: the filter curve actually falls
+
+- **The filter is drawn in dB, so the roll-off is a fall instead of a flat line at the end**: an
+  amplitude plot of a low-pass cannot look right on this half — the tail plunges and then
+  approaches zero asymptotically, which drew as a short horizontal run along the bottom of the
+  band. The curve is now a passband at 0 dB above the middle of the band, a resonance peak using
+  the headroom above it, and a fall below it; the passband itself leaves the band 32 dB down,
+  so the curve **ends on the bottom row** where the response runs out rather than trailing along
+  it. The cutoff's corner was also pulled in (`0.18 .. 1.78` of the three decades) so the fall has
+  the same readable width at every cutoff instead of becoming a wall at the top of the dial and
+  ending a quarter of the way across at the bottom. Same maths on the OLED strip and in
+  `tools/env_row_preview.html`.
+- **…and the passband no longer meets the fall at an angle**: the roll-off was `max(0, f - corner)`,
+  which is flat right up to the corner and then straight — a drawn angle, not a curve. It is now
+  easiest in with a soft knee (`FLT_DB_KNEE`, 0.16 decades), so the passband bends progressively
+  into the fall and reaches the full slope only past the corner: no step between two columns is
+  more than 3 of the band's 48 rows, and the peak is stated in dB so it keeps its height whatever
+  the headroom is set to.
+
+### `FLAVOR` per track type — and it finally survives a reboot
+
+- **The row flavor is now kept per TRACK TYPE as well as per F bank**: DRUM, MONO and POLY
+  each remember their own four flavors (twelve values), and the set that applies is the **edit
+  channel's TRACK** — the same track whose CCs the row shows. A drum page can draw `LEVEL`
+  bars while the poly page on the same channel keeps its `ENVELOPE`, and turning `TRACK`
+  brings that type's own choices back instead of overwriting them. The `F1–F4` legend labels
+  follow the edit track too.
+- **The flavors were being overwritten by the brightness setting**: both the FLAVOR block and
+  the device-settings record (LED % / screen %) lived at EEPROM address **2184**, so the first
+  LED or screen brightness change replaced the flavor magic and every boot fell back to
+  `DIALS`. The setting moved to **2200**, the flavor block is now 14 bytes at **2184..2197**
+  (`magic 0xD0 | 3 × 4 flavors | checksum`, with a new magic because the old 6-byte layout has
+  a different length), and `CFG_EE_BYTES` grew to 2208 to cover both.
+- **`ENCMODE4 + REC` now saves the flavors with the CC values**, instead of CCs only — the
+  REC is the one save gesture on that page, so it stores everything the page owns. The
+  release-time write stays, `encFlavorHold(false, …)` also flushes when a mode change drops the
+  menu, and `loop()` calls `encFlavorFlush()` so a pending edit is committed as soon as no F pad
+  is held (still one write per edit, never mid-turn).
+
+### `ENVELOPE` row: a readable resonance peak and a real envelope knee
+
+- **The filter curve now has a visible resonance peak and a rounded corner**: the passband was a
+  flat line that met a brick wall at a right angle, with the bump buried in the wall. The shelf
+  now sits at half the band with the top half left as headroom, the resonance lifts a broad hump
+  out of it at the corner (a wider shoulder below the corner than above it), and the 24 dB/oct
+  drop is a quartic knee instead of `1/sqrt(1 + x^48)` — it still reaches the floor a third of a
+  decade past the corner, but the bend is a curve, not a corner.
+- **`ATTACK` at 0 is now an instant jump**: the attack segment had a 5 % floor, so even a zero
+  attack drew a 12 px ramp and the stage always kept an angle. It is one pixel now — the note
+  starts at full level — and the knob stretches it from there. The rest of the shape is
+  unchanged: straight rise to the peak, bending decay to the sustain level, flat hold, bending
+  release back to zero, with the axes as they were (time left to right, level bottom to top).
+
+### The F-bank `FLAVOR`s survive a power cycle
+
+- **Each bank's row flavor (DIALS / BARS / ENVELOPE / LFO) is now remembered at boot**: it was
+  RAM-only by design, so a reboot always drew dials and every bank had to be set again. The four
+  bytes live in their own EEPROM block after the CC values — `magic | 4 flavors | checksum` at
+  **2184..2189** — and are written **when the F pad being edited is released**, not on every
+  detent: one NVS commit per edit instead of one per click, and no knob turn ever waits on the
+  store. `encFlavorLoad()` runs at boot next to `encCcLoad()`, before the first draw. A blank or
+  corrupt block (a board that never stored one, or an older firmware) leaves the dials exactly
+  as before, and the block is separate from the CC block so neither can invalidate the other's
+  checksum.
+
+### `PLAY` works in KEYMODE and ENCMODE
+
+- **The transport's `PLAY` button now starts and stops the sequence in `KEYMODE` (all four
+  variants) and in `ENCMODE` 1/2/4**, not only in SEQMODE and KEYMODE4: the sequencer keeps
+  playing across a mode change, so the button that started it has to travel with you instead of
+  going dead on the page you switched to. Same Start / Stop-while-INT behavior as SEQMODE.
+  **ENCMODE3** keeps its documented exception — there `PLAY` toggles the clock source
+  (`INT` / `EXT`) and never touches the transport.
+
+### Panel knobs: the list knobs step at the shared rate
+
+- **Every list / enum knob now steps through `encStep()`, not a hard-wired 4 counts**: on this
+  panel the knobs are **detentless AS5600s driven at 96 counts a turn**, so the old `4 counts =
+  1 value` blocks meant **24 values per revolution**. SEQMODE3 `SPEED` / `TRACK` / `TYPE`,
+  SEQMODE4 `EXT INPUT` / `SOURCE`, the ARP page's `SPAN` / `MODE` / `INST` / `ORDER` / `STEP` /
+  `PIVOT` (and every other non-% ARP slot), the BASS `TONES` / `RANGE` / `LOW` / `ALGO` and the
+  LEAD `CONTOUR` / `GD` knobs, `FOLLOW`, the three live-record knobs, `PAD`, `MAP`, swing style,
+  `INPUT` and the per-step `TYPE` / `RATCHET` arms now move **one value per 12 counts (8 a
+  turn)** on the panel and keep one value per detent on the Teensy's quadrature knobs. The BASS
+  options were the worst of them: they ran through `encDrain` (1 count = 1 unit), so a four-value
+  list passed 24 times in one turn.
+- **Wide stepped ranges keep their old rate on purpose**: `PAT LEN` (0–64), `VELOCITY` and
+  `ACCENT VEL` (1–127), the generator's per-step `OCT` / `BRW` / `PROB` and the `SHIFT` rotation
+  stay at 4 counts per value — 8 a turn would make a 127-value sweep 16 turns of the knob.
+
+### `FLAVOR` row: slower knob, taller filter, tight readouts
+
+- **The `FLAVOR` knob now steps at the shared list-knob rate**: the hold-F knob advanced one
+  state for every raw encoder edge, so a flick walked DIALS → BARS → ENVELOPE → LFO in one
+  movement. It goes through **`encStep()`** now — the helper GENRE / SCALE / PHRASE use — which
+  is one detent (4 counts) on the Teensy's quadrature knobs but a wider **12 counts** on this
+  panel's detentless AS5600 knobs: 8 states a turn instead of 24, i.e. a real quarter turn per
+  flavor, was a rate this list was never tuned against. The residue is kept per F bank, so
+  changing pads cannot spend a turn in progress. Still no wrap at either end.
+- **The filter is drawn in the `ENC1` column only, and taller**: it used to span a cell and a
+  half at the ADSR's 36 px; the width it gave up went back as height (48 px), so the LPF24
+  shelf, resonant bump and wall read as a real curve instead of a flat strip. Same maths, and
+  the right half (ADSR or LFO) is untouched.
+- **The `F1–F4` buttons now name their bank's flavor**: the control legend read a bare
+  `F1 F2 F3 F4`, so which bank drew what was only visible by arming it. Each button now
+  carries that bank's row flavor — **`DIAL` / `LEVEL` / `ENV` / `LFO`** (the spelled-out
+  `ENVELOPE` / `BARS` would not fit the OLED's 25 px slot) — on ENCMODE 1/2/4, with the armed
+  one still filled. The NEXT Live overlay (where the pads are clip actions) and ENCMODE3's
+  channel picker keep the plain `F1..F4`.
+- **The LFO readouts are `label: value` on one line** (`DEPTH: 75%`, `RATE: 1.2HZ`,
+  `SHAPE: RANDOM`, `SYNC: BEAT`): the value used to be right-aligned at the end of a 90 px
+  slot, which read as four loose numbers. The pairs are measured and laid out from the `ENC2`
+  column, leaning left over the free space beside the filter if they need it. The 128 px OLED
+  keeps them stacked, but the value now sits left-aligned directly under its caption.
+
 ### `FSCALE` on KEYMODE's ENC4
 
 - **KEY 1's ENC4 now dials `FSCALE` (force-to-scale)**: the slot idled at `--`, but the

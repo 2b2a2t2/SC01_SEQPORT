@@ -54,13 +54,16 @@ bool ccCfgActive();    // ...and drawable now: ENCMODE 1/2/4, no Live overlay
 // ENCMODE4 FLAVOR: how the ENC5..8 row is DRAWN - dials (as everywhere), level
 // bars for volume / expression CCs, or one ADSR curve across the row (ENC5 =
 // attack, ENC6 = decay, ENC7 = sustain, ENC8 = release), each value keeping its
-// own tight bar.  One flavor PER F bank, the row draws the armed bank's, and it
+// own tight bar.  One flavor PER TRACK TYPE (DRUM / MONO / POLY) PER F bank, so
+// a drum page and a poly page can look different, the row draws the edit
+// track's armed bank's, and it
 // does so on ENCMODE 1, 2 and 4 (not on 3, the channel picker) - leaving
 // ENCMODE4 for plain ENCMODE keeps the row, it does not fall back to dials.
 // Opening the FLAVOR menu arms the bank it edits, so the flavor you set stays
-// on screen and comes back with that bank after a mode round trip.
-// RAM only; it never touches the CC numbers or the stored values, which keep
-// sending exactly as before
+// on screen and comes back with that bank after a mode round trip.  The four
+// flavors are STORED (own EEPROM block, written when the F pad is released) so
+// a power cycle returns the row you left; they never touch the CC numbers or
+// the stored values, which keep sending exactly as before
 #define ENC_FLAVOR_DIALS  0
 #define ENC_FLAVOR_BARS   1
 #define ENC_FLAVOR_ENV    2
@@ -70,8 +73,13 @@ bool ccCfgActive();    // ...and drawable now: ENCMODE 1/2/4, no Live overlay
 #define ENC_FLAVOR_LFO    3
 #define ENC_FLAVOR_COUNT  4
 
-uint8_t encFlavorOf(uint8_t bank);                 // 0..2, bank 0..3 = F1..F4
+// the edit track's own set: DRUM / MONO / POLY keep separate flavors, so the
+// same F bank can be BARS on a drum track and ENVELOPE on a poly one
+uint8_t encFlavorOf(uint8_t bank);                 // 0..3, bank 0..3 = F1..F4
 const char* encFlavorName(uint8_t flavor);         // DIALS / BARS / ENVELOPE / LFO
+// the same four, short enough for a legend slot - the F1..F4 buttons print it:
+// DIAL / LEVEL / ENV / LFO
+const char* encFlavorShort(uint8_t flavor);
 void encFlavorStep(uint8_t bank, int16_t counts);  // one state per turn, no wrap
 
 // Is an F pad HELD in ENCMODE4 (0..3), 0xFF when nothing is held - what opens
@@ -79,6 +87,16 @@ void encFlavorStep(uint8_t bank, int16_t counts);  // one state per turn, no wra
 // change is visible under the finger
 void encFlavorHold(bool on, uint8_t bank);
 uint8_t encFlavorHeld();
+
+// The flavors are persisted in their own EEPROM block (magic + 3 x 4 bytes +
+// checksum, 2184..2197, after the CC block and before the device settings).
+// encFlavorSave() runs when the F pad is released or with ENCMODE4 + REC - not
+// on every detent, so a knob turn never waits on NVS - and encFlavorLoad() runs
+// at boot next to encCcLoad().  encFlavorFlush() is the loop-time safety net
+// for an edit whose release the pad handler never reported
+void encFlavorSave();
+void encFlavorLoad();
+void encFlavorFlush();
 
 // CC number knob ei sends when `bank` (0..3) is the armed one - what the
 // FLAVOR preview prints while another bank's pad is held

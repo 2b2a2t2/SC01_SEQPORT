@@ -594,10 +594,7 @@ uint8_t seqRecToggle() {
 // Switching is side-effect free: LISTEN/PLAYBACK/OVERDUB steer the next
 // record pass / the playback read - nothing stored is rewritten
 void seqRecListenAdjust(int16_t counts) {
-  recListenRes += counts;
-  int8_t step = 0;
-  while (recListenRes >= 4)  { recListenRes -= 4; step++; }
-  while (recListenRes <= -4) { recListenRes += 4; step--; }
+  int16_t step = encStep(counts, &recListenRes);
   if (!step) return;
   int16_t v = (int16_t)recListen[seqEditCh] + step;
   if (v < REC_LISTEN_CHORD) v = REC_LISTEN_CHORD;
@@ -623,10 +620,7 @@ const char *seqRecListenName(uint8_t v) {
 }
 
 void seqRecPlaybackAdjust(int16_t counts) {
-  recPlayRes += counts;
-  int8_t step = 0;
-  while (recPlayRes >= 4)  { recPlayRes -= 4; step++; }
-  while (recPlayRes <= -4) { recPlayRes += 4; step--; }
+  int16_t step = encStep(counts, &recPlayRes);
   if (!step) return;
   int16_t v = (int16_t)recPlayback[seqEditCh] + step;
   if (v < REC_PLAY_GATE) v = REC_PLAY_GATE;
@@ -652,10 +646,7 @@ const char *seqRecPlaybackName(uint8_t v) {
 }
 
 void seqRecOverdubAdjust(int16_t counts) {
-  recOverRes += counts;
-  int8_t step = 0;
-  while (recOverRes >= 4)  { recOverRes -= 4; step++; }
-  while (recOverRes <= -4) { recOverRes += 4; step--; }
+  int16_t step = encStep(counts, &recOverRes);
   if (!step) return;
   int16_t v = (int16_t)recOverdub[seqEditCh] + step;
   if (v < REC_OVER_OFF) v = REC_OVER_OFF;
@@ -4429,7 +4420,7 @@ int seqGatePct() { return seqGate[seqEditCh]; }
 // of the edit sequence, 4 counts = 1, clamped 1..127 (accented steps use
 // seqAccVel)
 void seqVelocityAdjust(int16_t counts) {
-  velSRes += counts;
+  velSRes += counts;          // 127 values: the 4-count rate stays
   int16_t st = 0;
   while (velSRes >= 4) { velSRes -= 4; st++; }
   while (velSRes <= -4) { velSRes += 4; st--; }
@@ -4461,10 +4452,7 @@ int seqProbPct() { return seqProb[seqEditCh]; }
 // (0/1 = one block chord, like before; live - the playhead re-reads
 // compHits on every advance, so a turn is audible on the next step)
 void seqCompHitsAdjust(int16_t counts) {
-  compSRes += counts;
-  int16_t st = 0;
-  while (compSRes >= 4) { compSRes -= 4; st++; }
-  while (compSRes <= -4) { compSRes += 4; st--; }
+  int16_t st = encStep(counts, &compSRes);
   if (!st) return;
   int v = (int)compHits[seqEditCh] + st;
   if (v < 0) v = 0;
@@ -4560,7 +4548,7 @@ void seqKlockSet(uint8_t i, bool v) {
 // F3 held in SEQMODE: ENC6 edits the edit sequence's ACCENT velocity
 // instead of its default one, 4 counts = 1, clamped 1..127 (boot 101)
 void seqAccentVelocityAdjust(int16_t counts) {
-  accSRes += counts;
+  accSRes += counts;          // 127 values: the 4-count rate stays
   int16_t st = 0;
   while (accSRes >= 4) { accSRes -= 4; st++; }
   while (accSRes <= -4) { accSRes += 4; st--; }
@@ -4611,10 +4599,7 @@ void seqSetAccentVelocity(uint8_t seq, uint8_t v) {
 // ENC5 in SEQMODE3: input channel of the edit sequence, 4 counts = 1 step,
 // clamped 1..16, no wrap
 void seqInputChannelAdjust(int16_t counts) {
-  inRes += counts;
-  int16_t step = 0;
-  while (inRes >= 4) { inRes -= 4; step++; }
-  while (inRes <= -4) { inRes += 4; step--; }
+  int16_t step = encStep(counts, &inRes);
   if (!step) return;
   int16_t v = (int16_t)seqInCh[seqEditCh] + step;
   if (v < 1) v = 1;
@@ -4654,10 +4639,7 @@ static bool extSrcAllows(uint8_t s, uint8_t port) {
 }
 
 void seqExtInModeAdjust(int16_t counts) {
-  extInRes += counts;
-  int8_t step = 0;
-  while (extInRes >= 4)  { extInRes -= 4; step++; }
-  while (extInRes <= -4) { extInRes += 4; step--; }
+  int16_t step = encStep(counts, &extInRes);
   if (!step) return;
   int16_t v = (int16_t)extInMode[seqEditCh] + step;
   if (v < SEQ_EXTIN_OFF) v = SEQ_EXTIN_OFF;
@@ -4690,10 +4672,7 @@ const char *seqExtInModeName(uint8_t v) {
 }
 
 void seqExtInSrcAdjust(int16_t counts) {
-  extSrcRes += counts;
-  int8_t step = 0;
-  while (extSrcRes >= 4)  { extSrcRes -= 4; step++; }
-  while (extSrcRes <= -4) { extSrcRes += 4; step--; }
+  int16_t step = encStep(counts, &extSrcRes);
   if (!step) return;
   int16_t v = (int16_t)extInSrc[seqEditCh] + step;
   if (v < SEQ_EXTIN_USB) v = SEQ_EXTIN_USB;

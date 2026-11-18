@@ -102,7 +102,9 @@ percentage for the strip, `tft.setBrightness()` for the backlight
 (`scrSetBrightness()`, a no-op on the Teensy), and `seqSetSyncInternal()` for
 the clock - the same switch as SEQMODE3 ENC4, so the two can never disagree.
 The two brightness values live in the last 4 bytes of the settings store
-(2184..2187: magic + LED % + screen % + checksum) and survive a power cycle;
+(2200..2203: magic + LED % + screen % + checksum) and survive a power cycle;
+those bytes used to be at 2184, on top of the FLAVOR block, which is why a
+brightness change wiped the stored row flavors;
 the clock source stays RAM, like the SEQMODE3 knob it mirrors.
 
 The tap itself is `scrTapHeader()` in `ScreenPanel.cpp`: an edge-detected
@@ -312,8 +314,9 @@ are fixed in the store rather than in the saves:
    no `EEPROM.begin()` the 2 KB RAM area does not exist, so every `put()` and
    `get()` silently does nothing, and a `put()` that never gets a `commit()`
    only edits that RAM copy. `cfgStoreBegin()` (Events.cpp, called once in
-   `setupSc01()` before the two loaders) opens it — `CFG_EE_BYTES = 2200`, the
-   160-byte pad + the 1398-byte SEQ block + the 579-byte CC block — and
+   `setupSc01()` before the two loaders) opens it — `CFG_EE_BYTES = 2208`, the
+   160-byte pad + the 1398-byte SEQ block + the 579-byte CC block + the
+   14-byte FLAVOR block + the 4-byte device settings — and
    `cfgStoreCommit()` ends both saves. Both are `#ifdef use_SC01Plus`: the
    Teensy 4.1 writes its emulated EEPROM on `put()` and has neither call.
 2. **The blocks overlapped** (the section above): the CC save wrote its magic

@@ -56,8 +56,8 @@ void scrDial(uint8_t i, const char* caption, uint8_t value);
 void scrCellBar(uint8_t i, const char* caption, uint8_t value);
 // The envelope row (ENCMODE4 FLAVOR = ENVELOPE), split in two halves with a
 // blank gap between them:
-//   LEFT  the filter - a 24 dB/oct low-pass curve whose corner follows the
-//         cutoff value and whose peak follows the resonance one (ENC1 / ENC2's
+//   LEFT  the filter - a low-pass curve whose corner follows the cutoff value
+//         and whose peak follows the resonance one (ENC1 / ENC2's
 //         CCs).  It carries NO readout of its own: those two numbers are the
 //         ENC1 / ENC2 dials directly above it
 //   RIGHT the ADSR curve of values[0..3] = attack, decay, sustain, release

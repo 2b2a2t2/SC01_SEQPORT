@@ -197,7 +197,8 @@ static float expFallOled(float u) {
 #define ENV_EDGE_OLED 0.88f
 static void envSegmentsOled(const uint8_t v[4], float* a, float* decayEnd,
                             float* relStart, float* relEnd) {
-  *a = 0.05f + 0.30f * ((float)v[0] / 127.0f);
+  // attack 0 = instant jump (single pixel), same as the panel's
+  *a = 0.005f + 0.30f * ((float)v[0] / 127.0f);
   const float d = 0.04f + 0.16f * ((float)v[1] / 127.0f);
   *decayEnd = *a + d;
 
@@ -226,27 +227,43 @@ static float envLevelOled(const uint8_t v[4], float x) {
   return -1.0f;
 }
 
-// LPF24 response for the row's left half, mirroring the panel's: the corner
-// follows the cutoff value, the peak the resonance one.
+// The filter curve's vertical scale, in dB, the same as the panel's: passband
+// at 0 dB, the peak at FLT_DB_PEAK, and the band ending FLT_DB_BOT below it so
+// the response falls off the bottom.  FLT_DB_TOP leaves headroom over the
+// peak; at 16 dB the maxed peak sat on the top row and clipped flat.
+#define FLT_DB_TOP      24.0f
+#define FLT_DB_PEAK     20.0f                  // the resonance at 127, in dB
+#define FLT_DB_BOT    (-32.0f)
+#define FLT_DB_PER_DEC  50.0f
+#define FLT_DB_KNEE     0.16f                  // decades: the soft knee
+
+// Low-pass response for the row's left half, mirroring the panel's: the corner
+// follows the cutoff value, the peak the resonance one, and past them one bend
+// into a dB roll-off that leaves the band instead of levelling out on it.  The
+// soft knee is what keeps the passband from meeting the fall at an angle.
 static float filterLevelOled(float f, uint8_t cutoff, uint8_t res) {
   const float dec = f * 3.0f;                                 // log axis
-  const float f0 = 0.25f + 2.10f * ((float)cutoff / 127.0f);  // corner, decades
+  const float f0 = 0.18f + 1.60f * ((float)cutoff / 127.0f);  // corner, decades
   const float r = (float)res / 127.0f;
-  const float dd = dec - f0;
-  const float x = powf(10.0f, dd < 0.3f ? dd : 0.3f);
-  const float x8 = x * x * x * x * x * x * x * x;
-  const float x16 = x8 * x8;
-  const float mag = 1.0f / sqrtf(1.0f + x16 * x16 * x16);     // brick wall
-  const float width = (dd < 0.0f) ? (0.10f + 0.08f * r) : (0.03f + 0.02f * r);
-  const float d = dd / width;
-  // same shelf / bump / headroom as the panel's
-  float lvl = 0.55f * mag + 0.42f * r * expf(-d * d);
-  if (lvl > 0.97f) lvl = 0.97f;
-  return lvl;
+  const float d = dec - f0;
+
+  const float w = (d < 0.0f) ? (0.24f + 0.14f * r) : (0.18f + 0.10f * r);
+  const float u = d / w;
+  // absolute height, clear of FLT_DB_TOP: the soft knee takes ~5 dB at the
+  // corner, so the bump starts above that to still read as a peak
+  const float peak = FLT_DB_PEAK * r * expf(-u * u);
+
+  const float v = d / FLT_DB_KNEE;
+  const float knee = (v > 30.0f) ? d : FLT_DB_KNEE * logf(1.0f + expf(v));
+
+  const float db = peak - FLT_DB_PER_DEC * knee;
+
+  const float lvl = (db - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  return lvl > 1.0f ? 1.0f : lvl;
 }
 
 // The envelope row (ENCMODE4 FLAVOR = ENVELOPE), split in two on the 128 px
-// strip as well: the filter (LPF24), a gap, then the ADSR.  Only the ADSR
+// strip as well: the filter, a gap, then the ADSR.  Only the ADSR
 // carries bars and CC numbers - the filter's two values are the dials above it.
 // The strip is a framebuffer, so each curve is drawn once rather than per cell.
 void scrEnvRow(const char* const envCaps[4], const uint8_t envVals[4],
@@ -259,16 +276,16 @@ void scrEnvRow(const char* const envCaps[4], const uint8_t envVals[4],
   const int top = 36;           // curve band: 36..48
   const int h = 13;
 
-  // left: the LPF24, no readout under it.  The curve stops where the response
-  // runs out (no zero line trailing towards the envelope)
+  // left: the filter, no readout under it.  The curve ends where it leaves the
+  // band (no flat tail trailing towards the envelope)
   int prevY = top + h - 1;
   bool fltJoined = false;
   for (int px = 0; px < fltW; px++) {
     const float f = (float)px / (float)(fltW - 1);
     const float lvl = filterLevelOled(f, cutoff, resonance);
-    if (lvl < 0.015f) {
-      fltJoined = false;
-      continue;
+    if (lvl <= 0.0f) {
+      if (fltJoined) u8g2.drawLine(px - 1, prevY, px, top + h - 1);
+      break;
     }
     const int py = top + (int)lroundf((1.0f - lvl) * (float)(h - 1));
     if (fltJoined) u8g2.drawLine(px - 1, prevY, px, py);
@@ -313,7 +330,7 @@ void scrEnvRow(const char* const envCaps[4], const uint8_t envVals[4],
 }
 
 // The LFO row (FLAVOR = LFO), laid out like the envelope row: the FILTER on the
-// left (the same LPF24, same 48 px), a 16 px blank band, then the still
+// left (the same filter, same 48 px), a 16 px blank band, then the still
 // waveform on the right half with its four readouts along the bottom - DEPTH
 // 75% / RATE 0.9HZ / SHAPE TRI / SYNC HZ.  Same mapping as the panel's
 // (Screen.h owns it): depth sets the height, rate the cycles, shape the
@@ -327,15 +344,16 @@ void scrLfoRow(const char* const lfoCaps[4], const char* const lfoVals[4],
   const int h = 13;
   const int mid = top + h / 2;
 
-  // left: the same LPF24 the envelope row draws, no readout under it
+  // left: the same filter the envelope row draws, no readout under it, ending
+  // where it leaves the band rather than on a flat tail
   int prevY = top + h - 1;
   bool fltJoined = false;
   for (int px = 0; px < fltW; px++) {
     const float f = (float)px / (float)(fltW - 1);
     const float lvl = filterLevelOled(f, cutoff, resonance);
-    if (lvl < 0.015f) {
-      fltJoined = false;
-      continue;
+    if (lvl <= 0.0f) {
+      if (fltJoined) u8g2.drawLine(px - 1, prevY, px, top + h - 1);
+      break;
     }
     const int py = top + (int)lroundf((1.0f - lvl) * (float)(h - 1));
     if (fltJoined) u8g2.drawLine(px - 1, prevY, px, py);
@@ -376,18 +394,17 @@ void scrLfoRow(const char* const lfoCaps[4], const char* const lfoVals[4],
     joined = true;
   }
 
-  // readouts: caption (micro) on one line, value (4x6) under it, per column.
-  // The panel puts both on one line; 128 px cannot - four label+value pairs need
-  // ~150 px even in the micro face - so the strip keeps the caption above the
-  // value in its four 32 px columns.
+  // readouts: caption (micro) on one line, value (4x6) directly under it, per
+  // column, both left-aligned so the number sits under the word it belongs to
+  // rather than at the far end of the column.  The panel puts both on ONE line
+  // as "CAP: value"; 128 px cannot - four label+value pairs need ~150 px even in
+  // the micro face - so the strip keeps the pair stacked, tight.
   for (uint8_t k = 0; k < 4; k++) {
     const int x = (int)k * SCR_COL_W + 1;
-    const int w = SCR_COL_W - 2;
     u8g2.setFont(u8g2_font_micro_tr);
     if (lfoCaps[k] && lfoCaps[k][0]) u8g2.drawStr(x, 56, lfoCaps[k]);
     u8g2.setFont(u8g2_font_4x6_tr);
-    if (lfoVals[k] && lfoVals[k][0])
-      u8g2.drawStr(x + w - (int)u8g2.getStrWidth(lfoVals[k]), 63, lfoVals[k]);
+    if (lfoVals[k] && lfoVals[k][0]) u8g2.drawStr(x, 63, lfoVals[k]);
   }
   mark();
 }

@@ -337,10 +337,7 @@ static uint8_t trackType[16] = {SEQ_TRACK_DRUM, SEQ_TRACK_POLY, SEQ_TRACK_POLY,
 static int16_t trackRes = 0;           // leftover encoder counts
 
 void seqTrackAdjust(int16_t counts) {
-  trackRes += counts;
-  int8_t step = 0;
-  while (trackRes >= 4)  { trackRes -= 4;  step++; }
-  while (trackRes <= -4) { trackRes += 4;  step--; }
+  int16_t step = encStep(counts, &trackRes);
   if (!step) return;
   uint8_t ch = seqEditChannel();
   if (ch < 1 || ch > 16) return;
@@ -380,10 +377,7 @@ static uint8_t monoType[16] = {0};
 static int16_t monoRes = 0;             // leftover encoder counts
 
 void seqMonoTypeAdjust(int16_t counts) {
-  monoRes += counts;
-  int8_t step = 0;
-  while (monoRes >= 4)  { monoRes -= 4;  step++; }
-  while (monoRes <= -4) { monoRes += 4;  step--; }
+  int16_t step = encStep(counts, &monoRes);
   if (!step) return;
   // a stale POLY SKANK value (5, the shared byte) starts from ROOT
   int16_t t = (int16_t)seqMonoType() + step;
@@ -430,10 +424,7 @@ void seqSetMonoType(uint8_t idx, uint8_t m) {
 static int16_t polyRes = 0;               // leftover encoder counts (own)
 
 void seqPolyTypeAdjust(int16_t counts) {
-  polyRes += counts;
-  int8_t step = 0;
-  while (polyRes >= 4)  { polyRes -= 4;  step++; }
-  while (polyRes <= -4) { polyRes += 4;  step--; }
+  int16_t step = encStep(counts, &polyRes);
   if (!step) return;
   uint8_t ec = seqEditChannel();
   if (ec < 1 || ec > 16) return;
@@ -481,10 +472,7 @@ static int16_t arpSpanRes = 0, arpModeRes = 0, arpInstRes = 0;
 static uint8_t arpEdit() { return seqEditChannel() - 1; }
 
 void seqArpSpanAdjust(int16_t counts) {
-  arpSpanRes += counts;
-  int8_t step = 0;
-  while (arpSpanRes >= 4)  { arpSpanRes -= 4;  step++; }
-  while (arpSpanRes <= -4) { arpSpanRes += 4;  step--; }
+  int16_t step = encStep(counts, &arpSpanRes);
   if (!step) return;
   int16_t v = (int16_t)arpSpan[arpEdit()] + step;
   if (v < 1) v = 1;
@@ -502,10 +490,7 @@ void seqArpSpanSet(uint8_t idx, uint8_t v) {
 }
 
 void seqArpModeAdjust(int16_t counts) {
-  arpModeRes += counts;
-  int8_t step = 0;
-  while (arpModeRes >= 4)  { arpModeRes -= 4;  step++; }
-  while (arpModeRes <= -4) { arpModeRes += 4;  step--; }
+  int16_t step = encStep(counts, &arpModeRes);
   if (!step) return;
   int16_t v = (int16_t)arpMode[arpEdit()] + step;
   if (v < SEQ_ARP_UP)     v = SEQ_ARP_UP;
@@ -534,10 +519,7 @@ const char *seqArpModeName(uint8_t v) {
 }
 
 void seqArpInstAdjust(int16_t counts) {
-  arpInstRes += counts;
-  int8_t step = 0;
-  while (arpInstRes >= 4)  { arpInstRes -= 4;  step++; }
-  while (arpInstRes <= -4) { arpInstRes += 4;  step--; }
+  int16_t step = encStep(counts, &arpInstRes);
   if (!step) return;
   int16_t v = (int16_t)arpInst[arpEdit()] + step;
   if (v < SEQ_INST_OFF) v = SEQ_INST_OFF;
@@ -616,11 +598,8 @@ void seqArpPAdjust(uint8_t p, int16_t counts) {
   int16_t step;
   if (arpPMaxT[p] > 8) {                  // a percentage: accelerated
     step = encDrain(counts, &res[p]);
-  } else {                                // small enum: one per detent
-    res[p] += counts;
-    step = 0;
-    while (res[p] >= 4)  { res[p] -= 4;  step++; }
-    while (res[p] <= -4) { res[p] += 4;  step--; }
+  } else {                    // small enum: one per list-knob step (encStep)
+    step = encStep(counts, &res[p]);
   }
   if (!step) return;
   int16_t v = (int16_t)arpP[arpEdit()][p] + step;
@@ -711,10 +690,10 @@ static uint8_t loopPage[16] = {0};       // bar looped by its own press
 static bool    loopOn[16] = {false};
 
 void seqPatLenAdjust(int16_t counts) {
-  patRes += counts;
-  int8_t step = 0;
-  while (patRes >= 4)  { patRes -= 4;  step++; }
-  while (patRes <= -4) { patRes += 4;  step--; }
+  patRes += counts;           // 0..64 steps: the 4-count rate stays
+  int16_t step = 0;
+  while (patRes >= 4) { patRes -= 4; step++; }
+  while (patRes <= -4) { patRes += 4; step--; }
   if (!step) return;
   uint8_t ch = seqEditChannel() - 1;
   int v = (int)patLen[ch] + step;
@@ -796,10 +775,7 @@ static uint8_t patSpeed[16] = { 6, 6, 6, 6, 6, 6, 6, 6,
 static int16_t spdRes = 0;               // leftover encoder counts (ENC4)
 
 void seqSpeedAdjust(int16_t counts) {
-  spdRes += counts;
-  int8_t step = 0;
-  while (spdRes >= 4)  { spdRes -= 4;  step++; }
-  while (spdRes <= -4) { spdRes += 4;  step--; }
+  int16_t step = encStep(counts, &spdRes);
   if (!step) return;
   int v = (int)patSpeed[seqEditChannel() - 1] + step;
   if (v < 0) v = 0;
@@ -1032,10 +1008,7 @@ void seqPadModeSetOf(uint8_t ch, uint8_t m) {
 // two-state, 4 counts = 1 state, clamped (no wrap) like every SEQMODE3 dial
 void seqPadModeAdjust(int16_t counts) {
   static int16_t padRes = 0;
-  padRes += counts;
-  int16_t st = 0;
-  while (padRes >= 4) { padRes -= 4; st++; }
-  while (padRes <= -4) { padRes += 4; st--; }
+  int16_t st = encStep(counts, &padRes);
   if (!st) return;
   int v = (int)seqPadMode() + st;
   if (v < 0) v = 0;
@@ -1055,10 +1028,7 @@ void seqMapSet(uint8_t m) {
   mapMode = (m <= SEQ_MAP_GD) ? m : SEQ_MAP_NEAR;
 }
 void seqMapAdjust(int16_t counts) {
-  mapRes += counts;
-  int16_t step = 0;
-  while (mapRes >= 4) { mapRes -= 4; step++; }
-  while (mapRes <= -4) { mapRes += 4; step--; }
+  int16_t step = encStep(counts, &mapRes);
   if (!step) return;
   int16_t v = (int16_t)mapMode + step;
   if (v < SEQ_MAP_NEAR) v = SEQ_MAP_NEAR;

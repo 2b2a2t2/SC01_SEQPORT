@@ -75,6 +75,21 @@ static void genAdjust(uint8_t *slot, int16_t *res, int16_t counts,
   *slot = (uint8_t)v;
 }
 
+// the small ENUMS (TONES / RANGE / LOW / ALGO, LEAD contour / guide tone) go
+// through encStep instead: they hold four values at most, so the 1 count = 1
+// unit rate above spent a whole list per millimetre of rim on the detentless
+// panel knobs.  encStep is a quadrature detent (4) or the panel's wider step
+// (12), the same weight the genre / scale / phrase knobs have
+static void genStep(uint8_t *slot, int16_t *res, int16_t counts,
+                    uint8_t lo, uint8_t hi) {
+  int16_t step = encStep(counts, res);
+  if (!step) return;
+  int16_t v = (int16_t)*slot + step;
+  if (v < lo) v = lo;
+  if (v > hi) v = hi;
+  *slot = (uint8_t)v;
+}
+
 void seqGenFillAdjust(int16_t c)   { genAdjust(&genFill[genIdx()], &genFillRes, c, 0, 100); }
 void seqGenAccAdjust(int16_t c)    { genAdjust(&genAcc[genIdx()], &genAccRes, c, 0, 100); }
 void seqGenGlideAdjust(int16_t c)  { genAdjust(&genGlide[genIdx()], &genGlideRes, c, 0, 100); }
@@ -116,21 +131,21 @@ uint8_t seqGenRangeOf(uint8_t i)  {   // 0 (unset) must never reach produce()
   return (i < 16 && genRange[i] >= 1 && genRange[i] <= 5) ? genRange[i] : 2; }
 uint8_t seqGenAlgoOf(uint8_t i)   { return i < 16 ? genAlgo[i]  : SEQ_GEN_CLASSIC; }
 
-// F-radio option dials: 1 detent = 4 counts = 1 value, clamped (no wrap)
+// F-radio option dials: one list-knob step (encStep) per value, clamped
 void seqGenTonesAdjust(int16_t c) {
-  genAdjust(&genTones[genIdx()], &genOptRes[0], c,
-            SEQ_GEN_TONES_ALL, SEQ_GEN_TONES_3);
+  genStep(&genTones[genIdx()], &genOptRes[0], c,
+          SEQ_GEN_TONES_ALL, SEQ_GEN_TONES_3);
 }
 void seqGenLowAdjust(int16_t c) {
-  genAdjust(&genLow[genIdx()], &genOptRes[1], c,
-            SEQ_GEN_LOW_C0, SEQ_GEN_LOW_C2);
+  genStep(&genLow[genIdx()], &genOptRes[1], c,
+          SEQ_GEN_LOW_C0, SEQ_GEN_LOW_C2);
 }
 void seqGenRangeAdjust(int16_t c) {
-  genAdjust(&genRange[genIdx()], &genOptRes[2], c, 1, 5);
+  genStep(&genRange[genIdx()], &genOptRes[2], c, 1, 5);
 }
 void seqGenAlgoAdjust(int16_t c) {
-  genAdjust(&genAlgo[genIdx()], &genOptRes[3], c,
-            SEQ_GEN_CLASSIC, SEQ_GEN_EUCLID);
+  genStep(&genAlgo[genIdx()], &genOptRes[3], c,
+          SEQ_GEN_CLASSIC, SEQ_GEN_EUCLID);
 }
 
 const char* seqGenTonesName(uint8_t v) {
@@ -146,10 +161,10 @@ const char* seqGenAlgoName(uint8_t v) {
   return n[v <= SEQ_GEN_EUCLID ? v : SEQ_GEN_CLASSIC];
 }
 
-// LEAD contour knob (per track, RAM; 4 counts = 1 step, clamped no wrap)
+// LEAD contour knob (per track, RAM; one encStep per value, clamped no wrap)
 void seqLeadContourAdjust(int16_t c) {
-  genAdjust(&leadContour[genIdx()], &genLeadRes, c,
-            SEQ_LEAD_ARCH, SEQ_LEAD_WALK);
+  genStep(&leadContour[genIdx()], &genLeadRes, c,
+          SEQ_LEAD_ARCH, SEQ_LEAD_WALK);
 }
 void seqLeadContourSet(uint8_t i, uint8_t v) {
   if (i >= 16) return;
@@ -173,9 +188,9 @@ void seqLeadCtSet(uint8_t i, uint8_t v) {
 uint8_t seqLeadCtOf(uint8_t i) {
   return i < 16 ? leadCtBlend[i] : 0;
 }
-// LEAD page GD knob: guide-tone set depth, 0..3 (4 counts = 1 step)
+// LEAD page GD knob: guide-tone set depth, 0..3 (one encStep per value)
 void seqLeadGdAdjust(int16_t c) {
-  genAdjust(&leadGdDepth[genIdx()], &genLeadGdRes, c, 0, 3);
+  genStep(&leadGdDepth[genIdx()], &genLeadGdRes, c, 0, 3);
 }
 void seqLeadGdSet(uint8_t i, uint8_t v) {
   if (i < 16) leadGdDepth[i] = v <= 3 ? v : 0;
@@ -518,7 +533,7 @@ void seqGenShiftAdjust(int16_t counts) {
   uint8_t ch = seqEditChannel() - 1;
   uint16_t n = seqPatLenOf(ch);
   if (n == 0 || n > SEQ_GEN_STEPS) return;
-  genShiftRes += counts;
+  genShiftRes += counts;      // rotates one step at a time: 4-count rate
   int16_t step = 0;
   while (genShiftRes >= 4) { genShiftRes -= 4; step++; }
   while (genShiftRes <= -4) { genShiftRes += 4; step--; }

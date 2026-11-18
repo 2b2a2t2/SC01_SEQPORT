@@ -13,8 +13,9 @@
 //                            clock) / EXTERNAL (slave, follow incoming USB
 //                            MIDI clock) - the same switch as SEQMODE3 ENC4
 //
-// The two brightness values are stored in EEPROM above both save blocks
-// (SEQ at 160..1557, ENC CC at 1600..2178) and survive a power cycle; the
+// The two brightness values are stored in EEPROM above every save block
+// (SEQ at 160..1557, ENC CC at 1600..2178, the per-track-per-bank flavors at
+// 2184..2197, device brightness at 2200..2203) and survive a power cycle; the
 // clock source stays RAM like the SEQMODE3 knob it mirrors.
 
 bool settingsOpen();

@@ -12,10 +12,14 @@
 #include <EEPROM.h>
 #include <stdio.h>
 
-// The store: magic | LED % | screen % | checksum = 4 bytes at 2184, the end
-// of the block CFG_EE_BYTES (2200) opens.  A blank or corrupt record leaves
-// the boot defaults, exactly like the other two blocks.
-#define DEV_EE_ADDR   2184
+// The store: magic | LED % | screen % | checksum = 4 bytes at 2200, the end of
+// the block CFG_EE_BYTES (2208) opens.  A blank or corrupt record leaves the
+// boot defaults, exactly like the other blocks.
+//
+// It used to sit at 2184 - the address the per-track FLAVOR block owns - so
+// saving a brightness overwrote the flavor magic and the row came back as
+// dials after every reboot.  It is past the flavor block now.
+#define DEV_EE_ADDR   2200
 #define DEV_EE_MAGIC  0xD5
 #define DEV_EE_LEN    4
 

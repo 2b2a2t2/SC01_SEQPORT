@@ -112,14 +112,16 @@ const char* stepFxSelName() { return stepFxName(stepFxType); }
 // across takes like the FX selection (both live in RAM only)
 static uint8_t stepTypeArmV = SEQ_POLY_STEP;
 
+// one value per list-knob step (encStep: a detent on quadrature knobs, the
+// panel's wider 12-count step) - it used to take one value per raw count, so
+// the detentless knobs walked this three-value wrap 32 times a turn
 void stepTypeArmAdjust(int16_t counts) {
-  int t = (int)stepTypeArmV;
-  int steps = counts > 0 ? (int)counts : -(int)counts;
-  if (steps > 0) {
-    if (counts > 0) t = (t + steps) % 3;
-    else t = ((t - steps) % 3 + 3) % 3;
-    stepTypeArmV = (uint8_t)t;
-  }
+  static int16_t typeRes = 0;
+  const int16_t steps = encStep(counts, &typeRes);
+  if (!steps) return;
+  int t = ((int)stepTypeArmV + steps) % 3;
+  if (t < 0) t += 3;
+  stepTypeArmV = (uint8_t)t;
 }
 uint8_t stepTypeArm() { return stepTypeArmV; }
 const char* stepTypeArmName() {
@@ -139,10 +141,7 @@ uint8_t stepRatArmSel() { return stepRatArmV; }
 // not a cycle point)
 void stepRatArmAdjust(int16_t counts) {
   static int16_t ratRes = 0;
-  ratRes += counts;
-  int16_t st = 0;
-  while (ratRes >= 4) { ratRes -= 4; st++; }
-  while (ratRes <= -4) { ratRes += 4; st--; }
+  int16_t st = encStep(counts, &ratRes);
   if (!st) return;
   int v = (int)stepRatArmV + st;
   if (v < 2) v = 2;
@@ -448,7 +447,9 @@ int8_t seqTrStepSelGet() {
   return seqTrStepSel;
 }
 
-// 4 counts = 1 value step of dial i (0 = OCT, 1 = BRW, 2 = PROB)
+// 4 counts = 1 value step of dial i (0 = OCT, 1 = BRW, 2 = PROB).  This one
+// keeps the narrow step: the same helper drives the 0..100 PROB, which needs
+// the faster rate to stay a sweep rather than a chore
 static int16_t genModStep(uint8_t i, int16_t counts) {
   genModRes[i] += counts;
   int16_t s = 0;
@@ -1681,8 +1682,9 @@ void handleButtonEvents() {
     if (ev == EV_PRESSED && ledForPad[pad] == groupTransport[1] &&
         modeBase == MODE_ENC && modeVariant == 4) {
       encCcSave();
-      headerShow("CC Saved");
-      if (logRoom(48)) Serial.println("  cc values saved to eeprom");
+      encFlavorSave();   // REC saves the whole page: the row flavors too
+      headerShow("Saved");
+      if (logRoom(48)) Serial.println("  cc values + flavors saved to eeprom");
     }
 
     // SEQMODE4 + REC: save every SEQ setting (track type, mono type, octave,
@@ -2053,9 +2055,12 @@ void handleButtonEvents() {
       }
     }
 
-    // PLAY in SEQMODE: Start (or Stop while the INT transport runs).
-    // ENCMODE3: PLAY = toggle the clock source instead (frees ENC4 for
-    // the pattern speed) - it never starts the transport there
+    // PLAY is the transport's play button in every mode, not only SEQMODE's:
+    // Start, or Stop while the INT transport runs.  A mode page must not hide
+    // the transport (you listen while you dial KEYMODE / ENCMODE), and the
+    // sequencer keeps playing across a mode change either way.
+    // The one exception stays ENCMODE3: there PLAY toggles the clock source
+    // (frees ENC4 for the pattern speed) and never starts the transport
     if (ev == EV_PRESSED && ledForPad[pad] == groupTransport[0]) {
       if (modeBase == MODE_ENC && modeVariant == 3) {
         seqSetSyncInternal(!seqIsSyncInternal());
@@ -2064,8 +2069,7 @@ void handleButtonEvents() {
           Serial.print("  clock ");
           Serial.println(seqIsSyncInternal() ? "INT" : "EXT");
         }
-      } else if (modeBase == MODE_SEQ ||
-                 (modeBase == MODE_KEY && modeVariant == 4)) {
+      } else {
         seqTogglePlay();
         if (logRoom(48)) Serial.println("  -> MIDI Play toggle");
       }
@@ -2354,23 +2358,37 @@ void ccCfgDismiss() { ccCfgOn = false; }
 bool ccCfgOpen() { return ccCfgOn; }
 bool ccCfgActive() { return ccCfgOn && ccCfgCtx(); }
 
-// ENCMODE4: how the second row is drawn (dials / bars / envelope).  Display
-// only - the CC numbers, the values and the MIDI send are untouched, which is
-// why this is RAM state and nothing else: a power cycle draws dials again,
-// exactly like the F bank reset does.
+// ENCMODE4: how the second row is drawn (dials / bars / envelope / LFO).
+// Display only - the CC numbers, the values and the MIDI send are untouched -
+// but the choice is part of how the panel looks, so it is STORED (see
+// encFlavorSave): the banks come back as you left them, unlike before, when a
+// power cycle always drew dials.  The write is deferred off the encoder path:
+// an NVS commit inside a knob event would stall the loop long enough to nudge
+// the clock, so it happens once, when the F pad being edited is released.
 //
-// One flavor PER F BANK, and the row draws the ARMED bank's - so wherever the
-// armed bank comes back from (a mode round trip recalls it through
-// encBankMem), the row shows the flavor that bank was given.  Which is why the
-// bank being edited is armed as soon as the FLAVOR menu opens (see the F hold
-// handler and encFlavorStep): otherwise the flavor lands on one bank and the
-// row keeps drawing another bank's DIALS
-static uint8_t encFlavorMem[4] = { ENC_FLAVOR_DIALS, ENC_FLAVOR_DIALS,
-                                   ENC_FLAVOR_DIALS, ENC_FLAVOR_DIALS };
-static uint8_t flavorHeldBank = 0xFF;   // 0..3 while an F pad is held
+// One flavor PER TRACK TYPE PER F BANK: a DRUM track's four CCs are not a
+// MONO track's (and its hits are not an ADSR), so what reads best on one track
+// type is not what reads best on another.  The set that applies is the EDIT
+// channel's track (`seqTrack()`), the same track whose CCs the row shows, so
+// switching TRACK on a channel brings back that type's own choices instead of
+// overwriting them.  Within a set the flavor belongs to the F BANK, and the
+// row draws the ARMED bank's - so wherever the armed bank comes back from (a
+// mode round trip recalls it through encBankMem), the row shows the flavor
+// that bank was given.  Which is why the bank being edited is armed as soon as
+// the FLAVOR menu opens (see the F hold handler and encFlavorStep): otherwise
+// the flavor lands on one bank and the row keeps drawing another bank's DIALS
+static uint8_t encFlavorMem[3][4] = {};   // [track type][bank], all DIALS
+static uint8_t flavorHeldBank = 0xFF;     // 0..3 while an F pad is held
+static bool flavorDirty = false;          // changed under the hold, not stored
+
+// the flavor set the edit channel's track type owns (DRUM / MONO / POLY)
+static uint8_t flType() {
+  const uint8_t t = seqTrack();
+  return t < 3 ? t : 0;
+}
 
 uint8_t encFlavorOf(uint8_t bank) {
-  return bank < 4 ? encFlavorMem[bank] : ENC_FLAVOR_DIALS;
+  return bank < 4 ? encFlavorMem[flType()][bank] : ENC_FLAVOR_DIALS;
 }
 
 const char* encFlavorName(uint8_t flavor) {
@@ -2379,21 +2397,60 @@ const char* encFlavorName(uint8_t flavor) {
   return flavor < ENC_FLAVOR_COUNT ? n[flavor] : n[0];
 }
 
-// One state per turn and NO wrap, like every other enum knob here - a wrapped
-// flavor would drop the one you just dialled in on the next detent
+// The legend-width name of a flavor - what the F1..F4 buttons print, since the
+// flavor is a property of that bank's pad.  Spelled out it would not fit the
+// OLED's 25 px slot, so ENVELOPE is ENV and BARS is LEVEL (what its bar is)
+const char* encFlavorShort(uint8_t flavor) {
+  static const char* n[ENC_FLAVOR_COUNT] = { "DIAL", "LEVEL", "ENV", "LFO" };
+  return flavor < ENC_FLAVOR_COUNT ? n[flavor] : n[0];
+}
+
+// One state per step of the SHARED stepped-knob rate and NO wrap, like every
+// other enum knob here - a wrapped flavor would drop the one you just dialled
+// in on the next detent.  encStep is what decides how wide a step is, and it
+// has to: this panel's knobs are detentless AS5600s at 96 counts per turn, so
+// a fixed 4 counts gave 24 states a revolution - about four per millimetre of
+// rim - and the 4-state flavor list went by on a nudge.  encStep is 12 counts
+// here (8 states per turn, the rate every other list knob uses) and 4 on the
+// Teensy's quadrature knobs (one detent), so the flavor feels like the genre /
+// scale / phrase knobs with no board check of its own.  The residue is per
+// bank, so switching F pads cannot spend the turn you had in progress
 void encFlavorStep(uint8_t bank, int16_t counts) {
+  static int16_t flavorRes[3][4] = {};   // residue per track type, per bank
   if (bank >= 4 || counts == 0) return;
-  int v = (int)encFlavorMem[bank] + (counts > 0 ? 1 : -1);
+  const uint8_t t = flType();
+  const int16_t step = encStep(counts, &flavorRes[t][bank]);
+  if (step == 0) return;
+  int v = (int)encFlavorMem[t][bank] + step;
   if (v < 0) v = 0;
   if (v >= ENC_FLAVOR_COUNT) v = ENC_FLAVOR_COUNT - 1;
-  encFlavorMem[bank] = (uint8_t)v;
+  if ((uint8_t)v != encFlavorMem[t][bank]) flavorDirty = true;
+  encFlavorMem[t][bank] = (uint8_t)v;
   // the bank being edited is the bank the row draws, now and after a mode
   // round trip (encBankSet also stores the per-channel page it recalls from)
   encBankSet(bank);
 }
 
+// the hold is the save point: the flavor is final when the pad comes up, and
+// one write per edit (a burst of detents is still one commit).  The `!on` path
+// also runs when a mode change drops the menu (Modes.cpp), which is the only
+// way out of it if the release itself was ever missed
 void encFlavorHold(bool on, uint8_t bank) {
   flavorHeldBank = (on && bank < 4) ? bank : 0xFF;
+  if (!on && flavorDirty) {
+    flavorDirty = false;
+    encFlavorSave();
+  }
+}
+
+// Safety net for a release the pad handler never reported: loop() calls this
+// after the event handlers, so a pending edit is stored the moment no F pad is
+// held any more - and it stays pending while one is, so a burst of detents is
+// still a single write
+void encFlavorFlush() {
+  if (flavorHeldBank < 4 || !flavorDirty) return;
+  flavorDirty = false;
+  encFlavorSave();
 }
 
 uint8_t encFlavorHeld() { return flavorHeldBank; }
@@ -2445,7 +2502,7 @@ static const uint16_t CC_EE_LEN = 579;
 // only reaches flash on commit().  The Teensy 4.1 writes its emulated EEPROM
 // on every put() and has neither call, hence the guards.  Both are called for
 // the SEQ block too (Keyboard.cpp), so the whole layout is opened once here.
-#define CFG_EE_BYTES 2200   // 160 pad + 1398 SEQ + 579 CC = 2137, rounded
+#define CFG_EE_BYTES 2208   // 160 pad + 1398 SEQ + 579 CC + 14 flavor + 4 device
 
 void cfgStoreBegin() {
 #ifdef use_SC01Plus
@@ -2483,6 +2540,50 @@ void encCcLoad() {
     for (uint8_t c = 0; c < 16; c++)
       ccVal[e][c] = b[2 + e * 16 + c] & 0x7F;
   encSetChannel(b[1]);
+}
+
+// The per-track FLAVORS in their own little block after the CC values (1600 +
+// 579 = 2179, so 2184 is the next free byte): magic | 3 x 4 flavors |
+// checksum, 14 bytes at 2184..2197.  A blank block reads as garbage and leaves
+// the dials, so a board that never stored one boots exactly as it always did.
+// This is separate from the CC block on purpose - the flavors are saved when
+// the F pad is released (and with ENCMODE4 + REC), while the CC values need
+// the REC, and one must not be able to invalidate the other's checksum.
+//
+// THIS ADDRESS IS THE REASON THE FLAVORS NEVER CAME BACK: the device-settings
+// record (Settings.cpp) used to sit at 2184 as well, four bytes at the same
+// place, so the first LED / screen brightness change overwrote the flavor
+// magic and every boot fell back to dials.  Settings moved to 2200; the magic
+// is new (0xD0) so the old 6-byte layout, which has a different length, cannot
+// be mistaken for this one.
+static const uint8_t FL_EE_MAGIC = 0xD0;
+static const uint16_t FL_EE_ADDR = 2184;
+static const uint8_t FL_EE_TRACKS = 3;                        // DRUM/MONO/POLY
+static const uint8_t FL_EE_LEN = 1 + FL_EE_TRACKS * 4 + 1;    // 14
+
+void encFlavorSave() {
+  uint8_t b[FL_EE_LEN];
+  b[0] = FL_EE_MAGIC;
+  for (uint8_t t = 0; t < FL_EE_TRACKS; t++)
+    for (uint8_t k = 0; k < 4; k++) b[1 + t * 4 + k] = encFlavorMem[t][k];
+  uint8_t sum = 0;
+  for (uint8_t i = 0; i < FL_EE_LEN - 1; i++) sum += b[i];
+  b[FL_EE_LEN - 1] = sum;
+  EEPROM.put(FL_EE_ADDR, b);   // put() writes only the bytes that changed
+  cfgStoreCommit();            // ...and commit() is what reaches NVS
+}
+
+void encFlavorLoad() {
+  uint8_t b[FL_EE_LEN];
+  EEPROM.get(FL_EE_ADDR, b);
+  uint8_t sum = 0;
+  for (uint8_t i = 0; i < FL_EE_LEN - 1; i++) sum += b[i];
+  if (b[0] != FL_EE_MAGIC || sum != b[FL_EE_LEN - 1]) return;
+  for (uint8_t t = 0; t < FL_EE_TRACKS; t++)
+    for (uint8_t k = 0; k < 4; k++) {
+      const uint8_t v = b[1 + t * 4 + k];
+      encFlavorMem[t][k] = (v < ENC_FLAVOR_COUNT) ? v : ENC_FLAVOR_DIALS;
+    }
 }
 
 // KEYMODE4: the M2 TONALITY menu borrows the four tonality knobs that
@@ -3766,10 +3867,7 @@ void handleEncoderEvents() {
           // every other SEQMODE dial (no wrap - a turn past FREEZE used to
           // drop straight back to OFF)
           static int16_t folRes = 0;
-          folRes += ed;
-          int8_t st = 0;
-          while (folRes >= 4) { folRes -= 4; st++; }
-          while (folRes <= -4) { folRes += 4; st--; }
+          int16_t st = encStep(ed, &folRes);
           if (st) {
             static const char *folN[3] = { "Off", "On", "Freeze" };
             int m = (int)seqFollowMode() + st;

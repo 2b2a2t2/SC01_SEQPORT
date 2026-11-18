@@ -190,10 +190,10 @@ static void useGrid() {
 // Envelope row (FLAVOR = ENVELOPE): the curve takes the top of the cell, then a
 // 6 px bar and the CC caption + number under it, all inside the 75 px row.
 //
-// The row is split in two: the FILTER under ENC1 / ENC2 on the left, the ADSR
-// of ENC5..8 on the right.  The curve used to span the whole 480 px, which made
+// The row is split in two: the FILTER in ENC1's cell on the left, the ADSR of
+// ENC5..8 on the right.  The curve used to span the whole 480 px, which made
 // the four values unreadable off the shape; at half the width the envelope
-// reads at a glance and the left half gains the filter the cutoff / resonance
+// reads at a glance and ENC1's cell gains the filter the cutoff / resonance
 // knobs are driving.
 #define ENV_TOP         8
 #define ENV_H          36
@@ -202,21 +202,50 @@ static void useGrid() {
 #define ENV_CAP_Y     (ENV_BAR_Y + ENV_BAR_H + 2)  // 56
 #define ENV_HALF_W    (PANEL_W / 2)             // 240: filter | envelope
 #define ENV_SLOT_W    (ENV_HALF_W / 4)          // 60: one ADSR value's column
-// A blank band between the two curves.  The filter may end anywhere, but the
-// envelope has to START on the cell edge: its four 60 px readouts must each
+// The filter graph fills ENC1's cell: a rectangle the size of the container
+// (120 x 75, inset two pixels) with the curve drawn inside it, so the graph
+// reads as its own instrument panel instead of a curve floating in the row.
+// It is the shape its two dials are about, so it gets the whole cell and the
+// taller plot that comes with it - nearly twice the ADSR's 36 px band.
+#define ENV_FLT_BOX_X   2                       // inset from the cell's edges
+#define ENV_FLT_BOX_Y   2
+#define ENV_FLT_BOX_W  (CELL_W - 4)             // 116
+#define ENV_FLT_BOX_H  (CELL_H - 4)             // 71
+#define ENV_FLT_PAD     4                       // air between frame and curve
+#define ENV_FLT_PLOT_X (ENV_FLT_BOX_X + ENV_FLT_PAD)      // 6
+#define ENV_FLT_PLOT_Y (ENV_FLT_BOX_Y + ENV_FLT_PAD)      // 6
+#define ENV_FLT_PLOT_W (ENV_FLT_BOX_W - 2 * ENV_FLT_PAD)  // 108
+#define ENV_FLT_PLOT_H (ENV_FLT_BOX_H - 2 * ENV_FLT_PAD)  // 63
+// The filter curve's vertical scale, in dB (see filterLevel).  The passband is
+// 0 dB, the peak sits FLT_DB_PEAK above it, and the band ends FLT_DB_BOT below
+// it - the response falls off the bottom of the band rather than levelling out
+// on it, so there is no flat tail to draw.
+//
+// The window is SYMMETRIC, +32 / -32 dB, and that is what puts the passband -
+// the flat run the curve starts with on the left - on the frame's middle row
+// instead of a few rows above it.  With an asymmetric window the graph sat high
+// in its rectangle however the band was framed.  The peak keeps its headroom:
+// 20 dB less the soft knee's few dB still lifts the curve 14 rows above the
+// passband, so a maxed resonance lands 16 rows into the 63 px plot instead of
+// on its top row.
+#define FLT_DB_TOP      32.0f
+#define FLT_DB_PEAK     20.0f                  // the resonance at 127, in dB
+#define FLT_DB_BOT    (-32.0f)
+#define FLT_DB_PER_DEC  50.0f                  // the roll-off as drawn
+#define FLT_DB_KNEE     0.16f                  // decades: the soft knee, see filterLevel
+// The envelope has to START on the cell edge: its four 60 px readouts must each
 // stay inside the cell that paints them, or the neighbour's fill erases them.
-#define ENV_GAP       50                        // blank band, 190..239
-#define ENV_FLT_END   (ENV_HALF_W - ENV_GAP)    // 190: the filter curve's width
 #define ENV_ENV_X     ENV_HALF_W                // 240: the ADSR starts here
-// The LFO row uses the same skeleton: the filter on the left, the blank band,
-// then the waveform on the right.  Its four readouts sit on ONE line, caption
-// left and value right, exactly like the ADSR's - so they have to be wider than
-// the ADSR's 52 px ("SHAPE RANDOM" is 11 characters of the 10 px face).  The
-// line therefore starts at 120, the ENC2 column, and runs to the row's right
-// edge in four 90 px slots: it uses the band under the filter's tail, which the
-// curve itself never reaches (the curve ends at y+43, this line sits at y+56).
-#define LFO_READ_X    (PANEL_W / 4)                     // 120: under ENC2
-#define LFO_SLOT_W    ((PANEL_W - LFO_READ_X) / 4)      // 90: one readout
+// The LFO row uses the same skeleton: the filter on the left, then the waveform
+// on the right.  Its four readouts sit on ONE line under the row as
+// "CAP: value" - the value directly behind its caption instead of parked at
+// the far end of a slot, which read as four loose numbers.  The line is
+// RIGHT-aligned: the last value ends 4 px from the right edge and the pairs run
+// left from there, so the four readouts sit under the half they describe
+// instead of starting under ENC2's column and drifting inwards whenever a value
+// changed width.  The line sits at ENV_CAP_Y, below the filter's corner.
+#define LFO_READ_R    (PANEL_W - 4)                     // 476: right-aligned end
+#define LFO_READ_GAP  14                                // air between pairs
 #define LFO_READ_Y    ENV_CAP_Y                         // 56: the ADSR's line
 
 // ---------------------------------------------------------------------------
@@ -655,7 +684,9 @@ static float expFall(float u) {
 #define ENV_EDGE   0.88f        // the envelope never reaches past this
 static void envSegments(const uint8_t v[4], float* a, float* decayEnd,
                         float* relStart, float* relEnd) {
-  *a = 0.05f + 0.30f * ((float)v[0] / 127.0f);   // attack end
+  // attack 0 must be an instant jump, not a short ramp: the segment starts at
+  // a single pixel and only the knob makes it an angle
+  *a = 0.005f + 0.30f * ((float)v[0] / 127.0f);  // attack end
   const float d = 0.04f + 0.16f * ((float)v[1] / 127.0f);   // decay length
   *decayEnd = *a + d;
 
@@ -685,42 +716,52 @@ static float envLevel(float x, const uint8_t v[4]) {
   return -1.0f;
 }
 
-// LPF24 response for the row's left half - the shape a filter display should
-// have: a shelf that sits at 55% of the band with headroom above it, a resonant
-// bump rising out of that shelf at the corner, and the 24 dB/oct slope dropping
-// the curve to the floor just past it.  (Drawn at full scale the shelf would sit
-// on the ceiling and the bump would be invisible - hence the fixed headroom.)
+// The low-pass response for the row's left half, drawn the way a filter display
+// reads: a passband, a resonant peak on the corner, and then one bend into a
+// fall that keeps going until it leaves the band.  Every join in it is a bend -
+// nothing in the curve is a straight line meeting another straight line.
+//
+// The y axis is dB, and that is what makes the fall read as a fall: plotted as
+// amplitude, ANY filter curve is wrong on a small display - the tail plunges
+// and then approaches zero asymptotically, which draws as a flat line along the
+// floor.  In dB the roll-off is a straight line in the limit, so the curve has
+// one slope from the peak to the bottom of the band.  The passband sits at 0 dB
+// a little above half the band; everything over it is the headroom the peak
+// uses, which is what makes resonance visible at all - and it is headroom the
+// peak does not fill, so a maxed resonance reads as a spike, not as a top row.
 //
 // The x axis is LOG frequency: three decades (20 Hz .. 20 kHz) across the half,
-// the way a filter is actually displayed.  That is what keeps the high end in
-// its place - the 24 dB/oct slope covers a fixed half decade of the axis, so the
-// curve always reaches zero a set distance past the corner instead of trailing a
-// zero line off towards whatever is drawn to its right.  f runs 0..1 across the
-// half (axis position, not Hz), cutoff and res are the knobs' 0..127 values.
+// the way a filter is actually displayed, and everything is measured in decades
+// along it.  That is what keeps the peak and the knee the same shape wherever
+// the cutoff sits.  f runs 0..1 across the half (axis position, not Hz), cutoff
+// and res are the knobs' 0..127 values.
 static float filterLevel(float f, uint8_t cutoff, uint8_t res) {
   const float dec = f * 3.0f;                                 // 0..3 decades
-  const float f0 = 0.25f + 2.10f * ((float)cutoff / 127.0f);  // corner, decades
-  const float r = (float)res / 127.0f;
-  const float dd = dec - f0;                                  // decades from corner
-  // Capped for the power: past 0.3 decades the response is already six orders
-  // down, and x^48 would overflow a float long before that
-  const float x = powf(10.0f, dd < 0.3f ? dd : 0.3f);         // f / f0
-  const float x8 = x * x * x * x * x * x * x * x;             // (f / f0)^8
-  const float x16 = x8 * x8;
-  // 1 / sqrt(1 + x^48): a statement, not a slope.  A 24 dB/oct curve across a
-  // three-decade axis still reads as a long diagonal, so the drawn response is
-  // deliberately steeper than the knob's - the eye wants a wall at the end of a
-  // low-pass display
-  const float mag = 1.0f / sqrtf(1.0f + x16 * x16 * x16);
-  // The bump is asymmetric: a shoulder rising into the corner, a much narrower
-  // one leaving it, so its tail cannot soften the wall that follows it.  With
-  // the clamp only as a safety net (the sum peaks around 0.94 by itself) the
-  // top stays a peak instead of flattening into a plateau
-  const float width = (dd < 0.0f) ? (0.10f + 0.08f * r) : (0.03f + 0.02f * r);
-  const float d = dd / width;
-  float lvl = 0.55f * mag + 0.42f * r * expf(-d * d);
-  if (lvl > 0.97f) lvl = 0.97f;
-  return lvl;
+  const float f0 = 0.18f + 1.60f * ((float)cutoff / 127.0f);  // corner, decades
+  const float r = (float)res / 127.0f;                        // 0..1
+  const float d = dec - f0;                                   // decades past corner
+
+  // The peak is wider below the corner than above it, like an analog
+  // resonance, and broad enough to read as a peak instead of a spike
+  const float w = (d < 0.0f) ? (0.24f + 0.14f * r) : (0.18f + 0.10f * r);
+  const float u = d / w;
+  // FLT_DB_PEAK is an absolute height: the soft knee already takes ~5 dB at
+  // the corner, so the bump starts above that to still read as a peak, and it
+  // stays clear of FLT_DB_TOP however tall the band's headroom is made.
+  const float peak = FLT_DB_PEAK * r * expf(-u * u);
+
+  // The roll-off, eased in with a soft knee instead of a max(0, d): the hard
+  // version leaves a corner where the flat passband meets the slope, and a
+  // corner is exactly what reads as "a flat line, then a descending line".
+  // softplus bends the passband into the fall over FLT_DB_KNEE decades and
+  // reaches the full slope only once the corner is behind it, so the whole
+  // curve from the left edge to the bottom row is one continuous bend.
+  const float v = d / FLT_DB_KNEE;
+  const float knee = (v > 30.0f) ? d : FLT_DB_KNEE * logf(1.0f + expf(v));
+
+  const float db = peak - FLT_DB_PER_DEC * knee;
+  const float lvl = (db - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  return lvl > 1.0f ? 1.0f : lvl;
 }
 
 // One tight readout under a curve: a w px bar filled to the value, its CC
@@ -744,10 +785,55 @@ static void envReadout(int x, int y, int w, const char* cap, uint8_t v) {
   tft.setTextDatum(lgfx::textdatum_t::top_left);
 }
 
-// One cell's slice of the row: the filter curve on the left, the ADSR curve on
-// the right, and the blank band between them.  Each cell paints only the pixels
-// inside its own 120 px.
+// The filter graph: a rectangle the size of ENC1's cell, then the low-pass
+// curve inset inside it.  The curve ends on the plot's bottom row where the
+// response leaves the band instead of trailing along it, and it keeps clear of
+// the frame at every cutoff and resonance.  Shared by the ENVELOPE and LFO
+// flavors (both own cell 4 only).
+static void drawFilterBox() {
+  const int x = cellX(4);
+  const int y = cellY(4);
+
+  tft.drawRect(x + ENV_FLT_BOX_X, y + ENV_FLT_BOX_Y,
+               ENV_FLT_BOX_W, ENV_FLT_BOX_H, COL_GRID);
+
+  const int px0 = x + ENV_FLT_PLOT_X;
+  const int py0 = y + ENV_FLT_PLOT_Y;
+  const int bottom = py0 + ENV_FLT_PLOT_H - 1;
+
+  int prevX = px0;
+  int prevY = bottom;
+  bool joined = false;              // is prevX/prevY a point of the same curve?
+  tft.startWrite();
+  for (int k = 0; k < ENV_FLT_PLOT_W; k++) {
+    const int px = px0 + k;
+    const float f = (float)k / (float)(ENV_FLT_PLOT_W - 1);
+    const float lvl = filterLevel(f, filterVal[0], filterVal[1]);
+    // the response has left the bottom of its band: the curve ends on that
+    // last row instead of trailing along it to the frame
+    if (lvl <= 0.0f) {
+      if (joined) tft.drawLine(prevX, prevY, px, bottom, COL_ACCENT);
+      break;
+    }
+    const int py = py0 + (int)lroundf((1.0f - lvl) * (float)(ENV_FLT_PLOT_H - 1));
+    if (joined) tft.drawLine(prevX, prevY, px, py, COL_ACCENT);
+    prevX = px;
+    prevY = py;
+    joined = true;
+  }
+  tft.endWrite();
+}
+
+// One cell's slice of the row: the framed filter in cell 4, the ADSR curve from
+// cell 6 on, and nothing in between.  Each cell paints only the pixels inside
+// its own 120 px.
 static void drawEnvSlice(uint8_t i) {
+  if (i == 4) {                     // ENC1's cell: the framed filter graph
+    drawFilterBox();
+    return;
+  }
+  if (i < 6) return;                // ENC2 / ENC3: nothing in this flavor
+
   const int x = cellX(i);
   const int y = cellY(i);
 
@@ -756,32 +842,16 @@ static void drawEnvSlice(uint8_t i) {
   bool joined = false;              // is prevX/prevY a point of the same curve?
   tft.startWrite();
   for (int px = x; px < x + CELL_W; px++) {
-    int py;
-    if (px < ENV_FLT_END) {
-      const float f = (float)px / (float)(ENV_FLT_END - 1);
-      const float lvl = filterLevel(f, filterVal[0], filterVal[1]);
-      // past the corner there is no response left to draw: the curve ends on
-      // the floor instead of running a flat line on to the half's fixed edge
-      if (lvl < 0.015f) {
-        joined = false;
-        continue;
-      }
-      py = y + ENV_TOP + (int)lroundf((1.0f - lvl) * (float)(ENV_H - 1));
-    } else if (px >= ENV_ENV_X) {
-      const float t = (float)(px - ENV_ENV_X) /
-                      (float)(PANEL_W - ENV_ENV_X - 1);
-      const float lvl = envLevel(t, envVal);
-      // past the release there is nothing left: the curve ends there rather
-      // than lying on the floor out to the edge of the row
-      if (lvl < 0.0f) {
-        joined = false;
-        continue;
-      }
-      py = y + ENV_TOP + (int)lroundf((1.0f - lvl) * (float)(ENV_H - 1));
-    } else {
-      joined = false;               // the gap: draw nothing, join nothing
+    const float t = (float)(px - ENV_ENV_X) /
+                    (float)(PANEL_W - ENV_ENV_X - 1);
+    const float lvl = envLevel(t, envVal);
+    // past the release there is nothing left: the curve ends there rather
+    // than lying on the floor out to the edge of the row
+    if (lvl < 0.0f) {
+      joined = false;
       continue;
     }
+    const int py = y + ENV_TOP + (int)lroundf((1.0f - lvl) * (float)(ENV_H - 1));
     if (joined) tft.drawLine(prevX, prevY, px, py, COL_ACCENT);
     prevX = px;
     prevY = py;
@@ -800,39 +870,17 @@ static void drawEnvSlice(uint8_t i) {
   }
 }
 
-// The filter half of the row (cells 4/5): the LPF24 under ENC1 / ENC2, drawn
-// exactly as the envelope row draws it - shelf, bump, wall, and no readout of
-// its own because those two numbers are the dials right above it.  Shared by
-// the ENVELOPE and LFO flavors.
+// The filter of the row, for the LFO flavor: the same framed graph the
+// envelope row draws - passband, peak, fall inside ENC1's rectangle - and no
+// readout of its own because those two numbers are the dials right above it.
+// Only cell 4 has it; cell 5 stays blank so the two curves never overlap.
 static void drawFilterSlice(uint8_t i) {
-  const int x = cellX(i);
-  const int y = cellY(i);
-
-  int prevX = x;
-  int prevY = y + ENV_TOP + ENV_H - 1;
-  bool joined = false;              // is prevX/prevY a point of the same curve?
-  tft.startWrite();
-  for (int px = x; px < x + CELL_W && px < ENV_FLT_END; px++) {
-    const float f = (float)px / (float)(ENV_FLT_END - 1);
-    const float lvl = filterLevel(f, filterVal[0], filterVal[1]);
-    // past the corner there is no response left to draw: the curve ends on
-    // the floor instead of running a flat line on to the blank band
-    if (lvl < 0.015f) {
-      joined = false;
-      continue;
-    }
-    const int py = y + ENV_TOP + (int)lroundf((1.0f - lvl) * (float)(ENV_H - 1));
-    if (joined) tft.drawLine(prevX, prevY, px, py, COL_ACCENT);
-    prevX = px;
-    prevY = py;
-    joined = true;
-  }
-  tft.endWrite();
+  if (i == 4) drawFilterBox();
 }
 
-// The LFO row, laid out like the envelope row: the FILTER under ENC1 / ENC2 on
-// the left, the blank band, then the still waveform on the right with its four
-// values under it (see lfoSyncedWave in Screen.h).  Nothing here animates -
+// The LFO row, laid out like the envelope row: the FILTER in ENC1's framed
+// cell on the left, the blank band, then the still waveform on the right with
+// its four values under it (see lfoSyncedWave in Screen.h).  Nothing here animates -
 // depth sets the height around the centre line (0 = flat), rate the number of
 // cycles across the half, shape the waveform and sync how the cycles line up
 // (TRIG's one shot is as wide as one cycle of the rate, so the rate moves it).
@@ -846,7 +894,8 @@ static void drawLfoSlice(uint8_t i) {
   }
 
   // cells 6/7: the LFO half.  The waveform spans 240..479, so each cell paints
-  // its own 120 px of it, the same slice scheme the ADSR uses.
+  // its own 120 px of it, the same slice scheme the ADSR uses (the right half
+  // keeps the taller footprint free for the readout line under it).
   const int mid = y + ENV_TOP + (ENV_H - 1) / 2;
   const int w = PANEL_W - ENV_ENV_X;          // 240: the LFO's width
 
@@ -891,31 +940,36 @@ static void drawLfoSlice(uint8_t i) {
   }
   tft.endWrite();
 
-  // The four readouts, one line under the row: caption left, value right, in
-  // 90 px slots from the ENC2 column to the row's edge.  Only the LAST cell of
-  // the row draws them, because the line crosses all four cells and a cell's
-  // fill would erase text an earlier cell had already written (scrUpdate paints
-  // 4, 5, 6, 7 in that order, so 7 is always last).
+  // The four readouts, one line under the row: "DEPTH: 75%", "RATE: 1.2HZ"...
+  // Caption and value are one phrase, so the value starts right behind its
+  // colon instead of at the far end of a 90 px slot.  The four phrases are
+  // measured, then laid out RIGHT-aligned: the last value ends at LFO_READ_R
+  // and the rest run left from it, so the block is flush with the panel edge
+  // whatever widths the values happen to have.
+  //
+  // Only the LAST cell of the row draws them: the line crosses all four cells
+  // and a cell's fill would erase text an earlier cell had already written
+  // (scrUpdate paints 4, 5, 6, 7 in that order, so 7 is always last).
   if (i >= 7) {
+    char capColon[4][16];
+    int capW[4], valW[4];
+    int span = (int)(3 * LFO_READ_GAP);
+    useGrid();
     for (uint8_t k = 0; k < 4; k++) {
-      const int cx = LFO_READ_X + (int)k * LFO_SLOT_W + 4;
-      const int cw = LFO_SLOT_W - 8;
-      useGrid();
-      // "SHAPE SQUARE" is a little wider than the slot's 82 px, so the caption
-      // gives way leftwards into the air on its left instead of running into
-      // its own value: the pair stays one readable line, at worst touching the
-      // empty padding of the slot before it.
-      const int pairW =
-          (int)ceilf(tft.textWidth(lfoCap[k]) + tft.textWidth(lfoTxt[k])) + 2;
-      int capX = cx;
-      if (pairW > cw) capX = cx - (pairW - cw);
-      tft.setTextDatum(lgfx::textdatum_t::top_left);
+      snprintf(capColon[k], sizeof(capColon[k]), "%s:", lfoCap[k]);
+      capW[k] = (int)ceilf(tft.textWidth(capColon[k])) + 4;   // + the space
+      valW[k] = (int)ceilf(tft.textWidth(lfoTxt[k]));
+      span += capW[k] + valW[k];
+    }
+    int px0 = LFO_READ_R - span;
+    if (px0 < 2) px0 = 2;              // more than the row holds: start at the edge
+    tft.setTextDatum(lgfx::textdatum_t::top_left);
+    for (uint8_t k = 0; k < 4; k++) {
       tft.setTextColor(COL_DIM, COL_BG);
-      tft.drawString(lfoCap[k], capX, y + LFO_READ_Y);
-      tft.setTextDatum(lgfx::textdatum_t::top_right);
+      tft.drawString(capColon[k], px0, y + LFO_READ_Y);
       tft.setTextColor(COL_TEXT, COL_BG);
-      tft.drawString(lfoTxt[k], cx + cw, y + LFO_READ_Y);
-      tft.setTextDatum(lgfx::textdatum_t::top_left);
+      tft.drawString(lfoTxt[k], px0 + capW[k], y + LFO_READ_Y);
+      px0 += capW[k] + valW[k] + LFO_READ_GAP;
     }
   }
 }

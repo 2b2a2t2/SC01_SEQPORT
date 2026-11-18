@@ -108,8 +108,14 @@ static const char* ctrlLegend(uint8_t i) {
       static const char* ed[4] = { "FX", "TYPE", "ACC", "PROB" };
       return ed[i - 5];
     }
-    // ENCMODE: F1-F4 = the ENC5..8 CC-bank radio
+    // ENCMODE: F1-F4 = the ENC5..8 CC-bank radio, and each button NAMES the
+    // row FLAVOR that bank holds (DIAL / LEVEL / ENV / LFO) - the flavor lives
+    // on the pad, so the strip is where you read it, and the fill still marks
+    // which bank is armed.  The NEXT Live overlay (the pads are clip actions
+    // there) and the ENCMODE3 channel picker keep the plain F1..F4
     if (modeBase == MODE_ENC) {
+      if (modeVariant != 3 && !abltOn())
+        return encFlavorShort(encFlavorOf((uint8_t)(i - 5)));
       static const char* fr[4] = { "F1", "F2", "F3", "F4" };
       return fr[i - 5];
     }

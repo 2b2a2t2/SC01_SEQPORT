@@ -204,6 +204,7 @@ static void setupSc01() {
   // save is silently dropped.
   cfgStoreBegin();
   encCcLoad();
+  encFlavorLoad();   // the per-track / per-bank FLAVORs (own block, after the CCs)
   seqCfgLoad();
 
   // Display first: a fault in anything below must not be able to hide the
@@ -261,6 +262,7 @@ static void setupTeensy() {
   initButtons();
   cfgStoreBegin();  // no-op on the Teensy, kept for one boot order
   encCcLoad();      // BEFORE initDisplay: the first draw reads the knobs
+  encFlavorLoad();  // ...and the row FLAVORs, so the first draw is the right one
   seqCfgLoad();     // SEQ settings restore with them (patterns stay RAM)
   initDisplay();
   initEncoders();
@@ -304,6 +306,7 @@ void loop() {
 
   handleButtonEvents();
   handleEncoderEvents();
+  encFlavorFlush();   // store a pending ENCMODE4 FLAVOR edit once the pad is up
   uint32_t t3 = micros();
   seqDiagNote(2, t3 - t2);
 

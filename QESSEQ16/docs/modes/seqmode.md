@@ -3,7 +3,7 @@ _Docs home: [Teensy2048](../README.md) · [Cheat sheet](../cheatsheet.md) · [Gl
 
 # Sequencer Overview (SEQMODE)
 
-**Encoder feel**: one detent is **4 counts**. Knobs whose value is a wide range — every **0–100%** dial (BASS FILL/ACC/GLIDE/TIE, the LEAD CT blend, the ARP sub-page percentages, GATE, PROB, the eight SKANK knobs, DRUM FILL/MOT and the per-lane FILL/MOT) — go through `encDrain()` in `Encoders.cpp` at **1 count = 1 unit**, the same rate as the ENCMODE **CC knobs**, so **one detent = 4% and a full 0–100 sweep is about one turn**; a spin (the library hands a fast turn over as a bigger delta per poll) is worth up to **4×** that. Small enums (MODE, SPAN, TRACK, GENRE …) stay 1 step per detent, and the CC knobs themselves stay 1 count = 1 value. Two enums are the opposite: **FOLLOW** and the three **live-record knobs** (`LISTEN` / `PLAY` / `OVERDUB`) take **4 counts = 1 state**, so a value cannot be skipped by a fast turn.
+**Encoder feel**: one detent is **4 counts**. Knobs whose value is a wide range — every **0–100%** dial (BASS FILL/ACC/GLIDE/TIE, the LEAD CT blend, the ARP sub-page percentages, GATE, PROB, the eight SKANK knobs, DRUM FILL/MOT and the per-lane FILL/MOT) — go through `encDrain()` in `Encoders.cpp` at **1 count = 1 unit**, the same rate as the ENCMODE **CC knobs**, so **one detent = 4% and a full 0–100 sweep is about one turn**; a spin (the library hands a fast turn over as a bigger delta per poll) is worth up to **4×** that. Small enums and lists (MODE, SPAN, TRACK, SPEED, GENRE, the ARP sub-pages, FOLLOW, the three live-record knobs …) move **one value per `encStep()` step**: one detent on the quadrature knobs, and on the panel's detentless AS5600 knobs a wider **12-count** step (8 values a turn), so a nudge cannot skip half a menu. Wide stepped ranges keep their faster 4-counts-per-value rate — **PAT LEN** (0–64), **VELOCITY** / **ACCENT VEL** (1–127) and the generator's per-step `OCT` / `BRW` / `PROB` — because slowing those would turn a sweep into a chore. The CC knobs themselves stay **1 count = 1 value**.
 
 **Playhead** advances on MIDI clock (24 PPQN external or internal master at tempo). Up to 64 steps per track (four 16-step bars, `LEN` on `SEQ 3`), 16 tracks (one per MIDI channel 1–16).
 
@@ -62,7 +62,7 @@ _Docs home: [Teensy2048](../README.md) · [Cheat sheet](../cheatsheet.md) · [Gl
 - Each gesture writes the step under the playhead: **POLY/MONO replace** (fresh gesture clears step + attributes, held notes build the chord), **DRUM overdubs** (notes are added, never removed, duplicates skipped)
   - **POLY gestures are anchored**: all notes of one gesture (first touch → all keys up) land on the step where it **started** — on a HAND step each pluck carries its real onset (ms since the first touch, u16), so a long strum replays exactly as performed across later steps/bars
 - Press **REC again** = cancel (`rec off`); **transport stop** interrupts the pass and re-arms it for the next start
-- **PLAY starts in SEQMODE or KEYMODE4** — start the transport there first (or feed an external clock), then switch to KEYMODE to arm and play
+- **PLAY starts in any mode** — SEQMODE, every KEYMODE variant (including KEYMODE4) and ENCMODE 1/2/4, so the transport can be started or stopped from whatever page you are on; only ENCMODE3 gives PLAY to the clock-source toggle. Start it there (or feed an external clock) and switch pages as you like — the transport keeps running across the mode change
 
 ### Record options — `LISTEN` / `PLAY` / `OVERDUB`
 

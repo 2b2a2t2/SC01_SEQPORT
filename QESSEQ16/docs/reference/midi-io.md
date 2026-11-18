@@ -2,8 +2,8 @@
 _Docs home: [Teensy2048](../README.md) · [Cheat sheet](../cheatsheet.md) · [Glossary](../glossary.md)_
 
 # Transport
-- **PLAY** button (SEQMODE): Start (or Stop if INT transport running)
-- **PLAY** button (**ENCMODE3**): toggle clock **INT/EXT** — it never starts the transport there (frees SEQMODE3 ENC4)
+- **PLAY** button (every mode — SEQMODE, all KEYMODE variants, ENCMODE 1/2/4): Start (or Stop if the INT transport is running). The transport belongs to the sequencer, not to a page, so a mode page never takes the play button away
+- **PLAY** button (**ENCMODE3** only): toggle clock **INT/EXT** — it never starts the transport there (frees SEQMODE3 ENC4)
 - **SYNC=INT**: Teensy generates MIDI Clock (0xF8) + Start (0xFA) → DAW follows (**default**)
 - **SYNC=EXT**: Follows incoming USB-MIDI Clock/Start/Stop/Continue
 
