@@ -110,11 +110,11 @@ const ENV_FLT_BOX_X = 2;                    // the filter's rectangle: ENC1's ce
 const ENV_FLT_BOX_Y = 2;
 const ENV_FLT_BOX_W = CELL_W - 4;           // 116
 const ENV_FLT_BOX_H = CELL_H - 4;           // 71
-const ENV_FLT_PAD   = 4;                    // air between frame and curve
+const ENV_FLT_PAD   = 4;                    // air on the left only
 const ENV_FLT_PLOT_X = ENV_FLT_BOX_X + ENV_FLT_PAD;        // 6
-const ENV_FLT_PLOT_Y = ENV_FLT_BOX_Y + ENV_FLT_PAD;        // 6
-const ENV_FLT_PLOT_W = ENV_FLT_BOX_W - 2 * ENV_FLT_PAD;    // 108
-const ENV_FLT_PLOT_H = ENV_FLT_BOX_H - 2 * ENV_FLT_PAD;    // 63
+const ENV_FLT_PLOT_Y = ENV_FLT_BOX_Y + 1;                  // 3: the curve owns the frame's interior
+const ENV_FLT_PLOT_H = ENV_FLT_BOX_H - 2;                  // 69: passband still on row 37
+const ENV_FLT_CURVE_W = ENV_FLT_BOX_W - ENV_FLT_PAD - 1;   // 111: curve runs to the frame's right side
 const ENV_ENV_X   = ENV_HALF_W;             // 240
 const LFO_READ_R  = PANEL_W - 4;            // 476: the right-aligned end of the readouts
 const LFO_READ_GAP = 14;                    // air between "CAP: value" pairs
@@ -168,34 +168,32 @@ function envLevel(x, v) {
   return -1.0;                                       // past the release
 }
 
-// the filter curve's vertical scale, in dB: passband at 0 dB, the peak at
-// DB_PEAK, band ending DB_BOT below it. The window is symmetric (+/-32 dB) so
-// the passband sits on the frame's middle row; the peak keeps its headroom
+// the filter curve's vertical scale, in dB: passband at 0 dB, the resonance at
+// DB_PEAK, window ending DB_BOT below it. Symmetric (+/-32 dB) so the passband
+// sits on the frame's middle row, and DB_PEAK is sized so a maxed resonance
+// touches the frame's top side (34 dB over a response already a dB or two down)
 const FLT_DB_TOP = 32.0;
-const FLT_DB_PEAK = 20.0;
+const FLT_DB_PEAK = 34.0;
 const FLT_DB_BOT = -32.0;
-const FLT_DB_PER_DEC = 50.0;
-const FLT_DB_KNEE = 0.16;
+const FLT_DB_ORDER = 4;         // 4-pole low-pass: 24 dB/oct, LP24
+const FLT_DB_F0_MIN = 0.18;     // corner at cutoff 0, decades
+const FLT_DB_F0_MAX = 2.60;     // corner at 127: the far right, fall into the bottom-right corner
 
 function filterLevel(f, cutoff, res) {
-  // x axis is LOG frequency: three decades across the half, corner in decades
+  // x axis is LOG frequency: three decades across the graph, corner in decades
   const dec = f * 3.0;
-  const f0 = 0.18 + 1.60 * (cutoff / 127.0);
+  const f0 = FLT_DB_F0_MIN + (FLT_DB_F0_MAX - FLT_DB_F0_MIN) * (cutoff / 127.0);
   const r = res / 127.0;
   const d = dec - f0;
-  // resonance peak is wider below the corner than above it
-  const w = d < 0 ? (0.24 + 0.14 * r) : (0.18 + 0.10 * r);
+  // the filter itself, |H|^2 = 1 + u^8 with u = 10^d: exactly -3 dB (0.707) at
+  // the corner, then a steady 24 dB/oct - tight knee, steep wall
+  const db = -10.0 * Math.log10(1.0 + Math.pow(10.0, 2.0 * FLT_DB_ORDER * d));
+  // resonance: a smooth bell in dB on top of that response - gone at res 0
+  const w = d < 0 ? (0.24 + 0.14 * r) : (0.20 + 0.10 * r);
   const u = d / w;
-  // the soft knee takes ~5 dB at the corner, so the bump is an absolute height
-  // that stays clear of the band's top whatever the headroom is set to
-  const peak = FLT_DB_PEAK * r * Math.exp(-u * u);
-  // dB, so the roll-off falls instead of flattening along the floor - and a
-  // soft knee instead of max(d, 0), so the passband bends into the fall
-  // rather than meeting it at a corner
-  const v = d / FLT_DB_KNEE;
-  const knee = v > 30 ? d : FLT_DB_KNEE * Math.log(1 + Math.exp(v));
-  const db = peak - FLT_DB_PER_DEC * knee;
-  const lvl = (db - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  const total = db + FLT_DB_PEAK * r * Math.exp(-u * u);
+  const lvl = (total - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  if (lvl <= 0) return 0.0;     // rides the floor row, never cut off
   return lvl > 1.0 ? 1.0 : lvl;
 }
 
@@ -243,7 +241,8 @@ function envReadout(x, y, w, cap, v) {
 }
 
 // drawFilterBox(): the filter graph in ENC1's cell - a rectangle the size of
-// the container with the curve inset inside it, shared by both views
+// the container with the curve inside it, ended where it leaves the band
+// (no line along the floor), shared by both views
 function drawFilterBox(g, segFn) {
   g.strokeStyle = COL_GRID;
   g.lineWidth = 1;
@@ -253,10 +252,10 @@ function drawFilterBox(g, segFn) {
   let prevX = ENV_FLT_PLOT_X;
   let prevY = ENV_FLT_PLOT_Y + ENV_FLT_PLOT_H - 1;
   let joined = false;
-  for (let k = 0; k < ENV_FLT_PLOT_W; k++) {
-    const lvl = filterLevel(k / (ENV_FLT_PLOT_W - 1), state.cutoff, state.res);
-    // the response has left the bottom of its band: end the curve there
-    // instead of trailing a flat line along the floor
+  for (let k = 0; k < ENV_FLT_CURVE_W; k++) {
+    const lvl = filterLevel(k / (ENV_FLT_CURVE_W - 1), state.cutoff, state.res);
+    // the response has left the bottom of its band: close the fall on that row
+    // and stop - no line trailing along the floor to the frame
     if (lvl <= 0) {
       if (joined)
         segFn(prevX, prevY, ENV_FLT_PLOT_X + k, ENV_FLT_PLOT_Y + ENV_FLT_PLOT_H - 1);

@@ -211,28 +211,48 @@ static void useGrid() {
 #define ENV_FLT_BOX_Y   2
 #define ENV_FLT_BOX_W  (CELL_W - 4)             // 116
 #define ENV_FLT_BOX_H  (CELL_H - 4)             // 71
-#define ENV_FLT_PAD     4                       // air between frame and curve
+#define ENV_FLT_PAD     4          // air on the left only: the passband starts clear
 #define ENV_FLT_PLOT_X (ENV_FLT_BOX_X + ENV_FLT_PAD)      // 6
-#define ENV_FLT_PLOT_Y (ENV_FLT_BOX_Y + ENV_FLT_PAD)      // 6
-#define ENV_FLT_PLOT_W (ENV_FLT_BOX_W - 2 * ENV_FLT_PAD)  // 108
-#define ENV_FLT_PLOT_H (ENV_FLT_BOX_H - 2 * ENV_FLT_PAD)  // 63
-// The filter curve's vertical scale, in dB (see filterLevel).  The passband is
-// 0 dB, the peak sits FLT_DB_PEAK above it, and the band ends FLT_DB_BOT below
-// it - the response falls off the bottom of the band rather than levelling out
-// on it, so there is no flat tail to draw.
+// Vertically the curve uses the frame's whole interior, because a maxed
+// resonance has to touch the frame's top side and the fall to reach the floor
+// with no gutter under it.  The passband still lands on the frame's middle row
+// (37): 3..71 is symmetric about it, like the frame's own 2..72.
+#define ENV_FLT_PLOT_Y (ENV_FLT_BOX_Y + 1)                // 3
+#define ENV_FLT_PLOT_H (ENV_FLT_BOX_H - 2)                // 69
+// The curve's own x span: it starts in the frame's left air but runs all the
+// way to the frame's right side.  A maxed cutoff has to END on that right edge,
+// so the axis cannot stop at the inset plot's edge and leave a 4 px gap under
+// the fall - the wall would hang in the middle of the rectangle.
+#define ENV_FLT_CURVE_W (ENV_FLT_BOX_W - ENV_FLT_PAD - 1)  // 111: x 6..116
+// The filter curve, in dB (see filterLevel).  The passband is 0 dB, the peak
+// sits FLT_DB_PEAK above it, and the window ends FLT_DB_BOT below it.
 //
 // The window is SYMMETRIC, +32 / -32 dB, and that is what puts the passband -
-// the flat run the curve starts with on the left - on the frame's middle row
-// instead of a few rows above it.  With an asymmetric window the graph sat high
-// in its rectangle however the band was framed.  The peak keeps its headroom:
-// 20 dB less the soft knee's few dB still lifts the curve 14 rows above the
-// passband, so a maxed resonance lands 16 rows into the 63 px plot instead of
-// on its top row.
+// the flat run the curve starts with on the left - on the frame's middle row.
+//
+// FLT_DB_PEAK is the resonance's height in dB, an absolute amplitude so the bell
+// does not change size with the window: 33.1 dB over a response that is already
+// a decibel or two down there is the 31.5 dB that puts a maxed resonance's tip
+// on the plot's top row, one pixel under the frame's top line.
 #define FLT_DB_TOP      32.0f
-#define FLT_DB_PEAK     20.0f                  // the resonance at 127, in dB
+#define FLT_DB_PEAK     34.0f                  // the resonance at 127, in dB
 #define FLT_DB_BOT    (-32.0f)
-#define FLT_DB_PER_DEC  50.0f                  // the roll-off as drawn
-#define FLT_DB_KNEE     0.16f                  // decades: the soft knee, see filterLevel
+// The response is a 4-pole low-pass - 24 dB/oct, the slope the module's name is
+// about - and the order is fixed, because the slope is a property of the filter
+// and not of the knob.  Only where the knee sits changes with the cutoff.  At
+// this width the fall is 0.40 decades, fifteen of the curve's 111 columns: that
+// is what gives the knee its tight bend and the descent its wall-like look
+// without the fall turning into a vertical line.  Two poles spread it over
+// twenty-nine columns and read as a hill; sixteen drew it in five and read as
+// a cut.
+#define FLT_DB_ORDER     4
+// The corner's span along the 0..3 decade axis.  The top of the range puts the
+// maxed corner at 2.60 decades - four fifths of the way across, the far right -
+// and the fifteen columns of fall that follow land on the floor exactly at the
+// frame's right side, so a wide-open filter is a flat line, a tight knee and a
+// steep drop into the bottom-right corner.
+#define FLT_DB_F0_MIN   0.18f
+#define FLT_DB_F0_MAX   2.60f
 // The envelope has to START on the cell edge: its four 60 px readouts must each
 // stay inside the cell that paints them, or the neighbour's fill erases them.
 #define ENV_ENV_X     ENV_HALF_W                // 240: the ADSR starts here
@@ -717,50 +737,56 @@ static float envLevel(float x, const uint8_t v[4]) {
 }
 
 // The low-pass response for the row's left half, drawn the way a filter display
-// reads: a passband, a resonant peak on the corner, and then one bend into a
-// fall that keeps going until it leaves the band.  Every join in it is a bend -
-// nothing in the curve is a straight line meeting another straight line.
+// reads: a flat passband, a corner at -3 dB, and a roll-off that keeps falling
+// all the way to the right edge.  The curve is the filter's actual magnitude,
+// not a shape tuned to look like one:
+//
+//     |H|^2 = 1 + u^8,   u = 10^d,   d = decades from the corner
+//
+// a 4-pole Butterworth low-pass.  Everything the picture needs falls out of that
+// one expression: at d = 0 it is exactly -3 dB (0.707 of the passband), so the
+// knee is a real bend and not a corner; before it the passband is flat to a
+// hundredth of a dB; and behind it the slope settles at -80 dB/decade, the
+// 24 dB/oct the module is about, which is steep enough at this width to read as
+// a wall without becoming a vertical line.
 //
 // The y axis is dB, and that is what makes the fall read as a fall: plotted as
 // amplitude, ANY filter curve is wrong on a small display - the tail plunges
 // and then approaches zero asymptotically, which draws as a flat line along the
 // floor.  In dB the roll-off is a straight line in the limit, so the curve has
 // one slope from the peak to the bottom of the band.  The passband sits at 0 dB
-// a little above half the band; everything over it is the headroom the peak
-// uses, which is what makes resonance visible at all - and it is headroom the
-// peak does not fill, so a maxed resonance reads as a spike, not as a top row.
+// half way up the band; everything over it is the headroom the peak uses, and a
+// maxed resonance spends all of it and touches the top row.
 //
-// The x axis is LOG frequency: three decades (20 Hz .. 20 kHz) across the half,
-// the way a filter is actually displayed, and everything is measured in decades
-// along it.  That is what keeps the peak and the knee the same shape wherever
-// the cutoff sits.  f runs 0..1 across the half (axis position, not Hz), cutoff
-// and res are the knobs' 0..127 values.
+// The x axis is LOG frequency: three decades across the graph, the way a filter
+// is actually displayed, and everything is measured in decades along it.  That
+// is what keeps the peak and the knee the same shape wherever the cutoff sits.
+// f runs 0..1 across the graph (axis position, not Hz), cutoff and res are the
+// knobs' 0..127 values.
 static float filterLevel(float f, uint8_t cutoff, uint8_t res) {
   const float dec = f * 3.0f;                                 // 0..3 decades
-  const float f0 = 0.18f + 1.60f * ((float)cutoff / 127.0f);  // corner, decades
+  const float f0 = FLT_DB_F0_MIN + (FLT_DB_F0_MAX - FLT_DB_F0_MIN) *
+                                       ((float)cutoff / 127.0f);  // corner
   const float r = (float)res / 127.0f;                        // 0..1
   const float d = dec - f0;                                   // decades past corner
 
-  // The peak is wider below the corner than above it, like an analog
-  // resonance, and broad enough to read as a peak instead of a spike
-  const float w = (d < 0.0f) ? (0.24f + 0.14f * r) : (0.18f + 0.10f * r);
+  // the filter itself: |H|^2 = 1 + u^8, u = 10^d - exactly -3 dB at the corner,
+  // then a steady -80 dB/decade.  The knee is where the flat passband turns into
+  // that slope; the turn is tight because the order is high, but it is still a
+  // curve - nothing here is a corner or a vertical line.
+  const float db = -10.0f * log10f(1.0f + powf(10.0f, 2.0f * FLT_DB_ORDER * d));
+
+  // resonance: a smooth bell in dB sitting on top of that response, wide below
+  // the corner and narrower above it like an analog peak.  At 0 it is not there
+  // at all, so the curve is a plain low-pass.
+  const float w = (d < 0.0f) ? (0.24f + 0.14f * r) : (0.20f + 0.10f * r);
   const float u = d / w;
-  // FLT_DB_PEAK is an absolute height: the soft knee already takes ~5 dB at
-  // the corner, so the bump starts above that to still read as a peak, and it
-  // stays clear of FLT_DB_TOP however tall the band's headroom is made.
-  const float peak = FLT_DB_PEAK * r * expf(-u * u);
+  const float total = db + FLT_DB_PEAK * r * expf(-u * u);
 
-  // The roll-off, eased in with a soft knee instead of a max(0, d): the hard
-  // version leaves a corner where the flat passband meets the slope, and a
-  // corner is exactly what reads as "a flat line, then a descending line".
-  // softplus bends the passband into the fall over FLT_DB_KNEE decades and
-  // reaches the full slope only once the corner is behind it, so the whole
-  // curve from the left edge to the bottom row is one continuous bend.
-  const float v = d / FLT_DB_KNEE;
-  const float knee = (v > 30.0f) ? d : FLT_DB_KNEE * logf(1.0f + expf(v));
-
-  const float db = peak - FLT_DB_PER_DEC * knee;
-  const float lvl = (db - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  // below the window the curve rides its floor row (it is never cut off): the
+  // caller draws every column, so the curve always reaches the right edge
+  const float lvl = (total - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  if (lvl <= 0.0f) return 0.0f;
   return lvl > 1.0f ? 1.0f : lvl;
 }
 
@@ -786,10 +812,10 @@ static void envReadout(int x, int y, int w, const char* cap, uint8_t v) {
 }
 
 // The filter graph: a rectangle the size of ENC1's cell, then the low-pass
-// curve inset inside it.  The curve ends on the plot's bottom row where the
-// response leaves the band instead of trailing along it, and it keeps clear of
-// the frame at every cutoff and resonance.  Shared by the ENVELOPE and LFO
-// flavors (both own cell 4 only).
+// curve inside it.  The curve ends on the plot's bottom row where the response
+// leaves the band and the floor is not drawn on to the edge: a line running
+// along the bottom reads as part of the frame, not as a response.
+// Shared by the ENVELOPE and LFO flavors (both own cell 4 only).
 static void drawFilterBox() {
   const int x = cellX(4);
   const int y = cellY(4);
@@ -805,12 +831,12 @@ static void drawFilterBox() {
   int prevY = bottom;
   bool joined = false;              // is prevX/prevY a point of the same curve?
   tft.startWrite();
-  for (int k = 0; k < ENV_FLT_PLOT_W; k++) {
+  for (int k = 0; k < ENV_FLT_CURVE_W; k++) {
     const int px = px0 + k;
-    const float f = (float)k / (float)(ENV_FLT_PLOT_W - 1);
+    const float f = (float)k / (float)(ENV_FLT_CURVE_W - 1);
     const float lvl = filterLevel(f, filterVal[0], filterVal[1]);
-    // the response has left the bottom of its band: the curve ends on that
-    // last row instead of trailing along it to the frame
+    // the response has left the bottom of its band: close the fall on the last
+    // row and stop, rather than trailing a line along the floor to the frame
     if (lvl <= 0.0f) {
       if (joined) tft.drawLine(prevX, prevY, px, bottom, COL_ACCENT);
       break;

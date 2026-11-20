@@ -227,38 +227,36 @@ static float envLevelOled(const uint8_t v[4], float x) {
   return -1.0f;
 }
 
-// The filter curve's vertical scale, in dB, the same as the panel's: passband
-// at 0 dB, the peak at FLT_DB_PEAK, and the band ending FLT_DB_BOT below it so
-// the response falls off the bottom.  FLT_DB_TOP leaves headroom over the
-// peak; at 16 dB the maxed peak sat on the top row and clipped flat.
-#define FLT_DB_TOP      24.0f
-#define FLT_DB_PEAK     20.0f                  // the resonance at 127, in dB
-#define FLT_DB_BOT    (-32.0f)
-#define FLT_DB_PER_DEC  50.0f
-#define FLT_DB_KNEE     0.16f                  // decades: the soft knee
+// The filter curve, in dB, the same curve as the panel's: a 16-pole Butterworth
+// plus the resonance bell (see filterLevel).  The window is symmetric
+// (+48 / -48 dB), wider than the panel's because it has to hold the same
+// 32 dB spike in 13 rows: at +32 the maxed peak clipped flat against the top.
+#define FLT_DB_TOP      48.0f
+#define FLT_DB_PEAK     34.0f                  // the resonance at 127, in dB
+#define FLT_DB_BOT    (-48.0f)
+#define FLT_DB_ORDER    4                      // LP24: 24 dB/oct, tight knee, steep fall
+#define FLT_DB_F0_MIN   0.18f                  // corner at cutoff 0, decades
+#define FLT_DB_F0_MAX   2.60f                  // corner at 127: far right, fall to the bottom corner
 
-// Low-pass response for the row's left half, mirroring the panel's: the corner
-// follows the cutoff value, the peak the resonance one, and past them one bend
-// into a dB roll-off that leaves the band instead of levelling out on it.  The
-// soft knee is what keeps the passband from meeting the fall at an angle.
+// Low-pass response for the row's left half, mirroring the panel's: |H|^2 =
+// 1 + u^(2n), so the corner is -3 dB with no corner in it at all, plus the
+// resonance bell.  The curve is drawn to the last column, so it reaches the
+// end of the strip instead of stopping where it leaves the band.
 static float filterLevelOled(float f, uint8_t cutoff, uint8_t res) {
   const float dec = f * 3.0f;                                 // log axis
-  const float f0 = 0.18f + 1.60f * ((float)cutoff / 127.0f);  // corner, decades
+  const float f0 = FLT_DB_F0_MIN + (FLT_DB_F0_MAX - FLT_DB_F0_MIN) *
+                                       ((float)cutoff / 127.0f);  // corner
   const float r = (float)res / 127.0f;
   const float d = dec - f0;
 
-  const float w = (d < 0.0f) ? (0.24f + 0.14f * r) : (0.18f + 0.10f * r);
+  const float db = -10.0f * log10f(1.0f + powf(10.0f, 2.0f * FLT_DB_ORDER * d));
+
+  const float w = (d < 0.0f) ? (0.24f + 0.14f * r) : (0.20f + 0.10f * r);
   const float u = d / w;
-  // absolute height, clear of FLT_DB_TOP: the soft knee takes ~5 dB at the
-  // corner, so the bump starts above that to still read as a peak
-  const float peak = FLT_DB_PEAK * r * expf(-u * u);
+  const float total = db + FLT_DB_PEAK * r * expf(-u * u);
 
-  const float v = d / FLT_DB_KNEE;
-  const float knee = (v > 30.0f) ? d : FLT_DB_KNEE * logf(1.0f + expf(v));
-
-  const float db = peak - FLT_DB_PER_DEC * knee;
-
-  const float lvl = (db - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  const float lvl = (total - FLT_DB_BOT) / (FLT_DB_TOP - FLT_DB_BOT);
+  if (lvl <= 0.0f) return 0.0f;
   return lvl > 1.0f ? 1.0f : lvl;
 }
 
@@ -276,8 +274,8 @@ void scrEnvRow(const char* const envCaps[4], const uint8_t envVals[4],
   const int top = 36;           // curve band: 36..48
   const int h = 13;
 
-  // left: the filter, no readout under it.  The curve ends where it leaves the
-  // band (no flat tail trailing towards the envelope)
+  // left: the filter, no readout under it.  The curve closes on the bottom row
+  // where it leaves the band and stops there (no line along the floor)
   int prevY = top + h - 1;
   bool fltJoined = false;
   for (int px = 0; px < fltW; px++) {

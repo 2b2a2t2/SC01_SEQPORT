@@ -10,12 +10,30 @@ de-facto version marker is the size of the saved-settings block (see
 
 - **The filter graph now sits in a rectangle the size of the `ENC1` cell**: the curve is inset four
   pixels inside a 116 x 71 frame that fills the container, instead of floating in the row's upper
-  half, so it reads as its own little instrument panel. The plot is taller as a result (63 rows
-  against 48), so the passband, the peak and the fall all gain resolution; the frame keeps its
-  distance from the curve at every cutoff and resonance. The dB window is now symmetric
+  half, so it reads as its own little instrument panel. The plot is taller as a result (69 rows
+  against 48), so the passband, the peak and the fall all gain resolution; the curve may reach the
+  frame's top and right sides, so only the left keeps its air. The dB window is now symmetric
   (+32 / -32 dB) instead of +24 / -32, which puts the passband — the flat run the curve starts
   with on the left — on the frame's **middle row**; it used to sit four rows above centre.
-  A maxed resonance still peaks 16 rows into the plot, well clear of the top edge.
+  The resonance's height and the curve's right-hand end are the two points below.
+- **The curve is the module's own LP24 response, drawn tight**: a 4-pole Butterworth
+  (`|H|^2 = 1 + u^8`) on the log-frequency axis — flat at 0 dB up to the corner, exactly −3 dB (0.707) at
+  it — with the slope fixed at 24 dB/oct, because the slope belongs to the filter and not to the knob.
+  At this width the fall is fifteen of the curve's 111 columns: a tight knee and a wall-like drop that is
+  still a curve, never a corner or a vertical line. Earlier revisions varied the order with the cutoff
+  (1, 2, 4, 8, 16 poles) chasing the look, which made the shape either a hill or a cut; the knee's radius
+  is what reads as "curvy", and 24 dB/oct is where that radius and the steepness both land. With the
+  resonance at 0 there is no bump at all.
+- **A maxed resonance touches the top side of the frame**: the bell is a stated 32.5 dB of amplitude over a
+  response that is already a decibel or two down at the corner, i.e. the 31.9 dB that puts the spike's tip
+  one pixel under the frame's top line, with no clipping in the 128 x 128 cutoff/resonance sweep. It was a
+  14.5 dB bump before. The curve uses the frame's whole interior (rows 3–71, still symmetric about the
+  passband's row 37), so the tip has the top line to reach.
+- **The fall ends on the bottom row, and the floor is not drawn on**: the line closes where the response
+  leaves the dB window and stops there, instead of running along the bottom to the frame edge, where it
+  read as part of the border. The cutoff's top value puts the corner at 2.6 of the three decades — the far
+  right — so a wide-open filter is a horizontal line across the frame whose knee and fall land in the
+  bottom-right corner.
 
 ### `LFO` row: readouts flush right, and the filter peak keeps its headroom
 

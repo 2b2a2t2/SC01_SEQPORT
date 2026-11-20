@@ -168,6 +168,26 @@ static uint32_t hash32(uint32_t x) {
   return x;
 }
 
+// one lazy seed for every sSeed hash below - the ranking (scorePc /
+// deriveProposal), the apply walk (pickPc) and the HARM Viterbi.  sSeed used
+// to be a compile-time constant, so the FIRST generate of every boot drew the
+// identical progression: only F1 ever reseeded it, and M3 never did.  Drawn on
+// first use, which is always a user-timed moment (entering KEYMODE4, the
+// first HARM bake), so the clock carries the entropy the boot cannot.  It
+// then stays put for the rest of the boot: ranking and apply must keep
+// deriving the SAME quality from it (deriveProposal hashes only
+// seed/prev/pc, never the step), and the HARM bake must keep agreeing with
+// k4HarmStepChord.  F1 still reseeds on top of it.  Same expression as
+// Gen.cpp's genSeedOnce()
+static void k4SeedOnce() {
+  static bool seeded = false;
+  if (!seeded) {
+    sSeed = (uint32_t)(micros() ^ (millis() << 16));
+    if (sSeed == 0) sSeed = 0x9E3779B9u;
+    seeded = true;
+  }
+}
+
 // weighted pick over 4 buckets (0..3)
 static uint8_t pick4(const int32_t *w, uint32_t h) {
   int32_t total = w[0] + w[1] + w[2] + w[3];
@@ -1351,6 +1371,7 @@ static void applyModulation(int L) {
 }
 
 static int k4ApplyBody() {
+  k4SeedOnce();               // first generate of the boot draws the seed
   int L = seqPatLen();
   if (L <= 0) return 0;
   sChain = false;                         // the pattern itself is the context
@@ -1679,6 +1700,7 @@ static uint8_t harmEmit(uint8_t t, uint8_t d, bool arp) {
 // returns the pattern length L (<=0 = nothing to infer).  Read-only: the
 // caller decides what to do with the path (bake every step, or just one)
 static int harmInferPath(uint8_t *path, bool *has) {
+  k4SeedOnce();               // ...and the first HARM bake draws it too
   int L = seqPatLen();
   if (L <= 0 || L > 64) return -1;
   buildFw();
@@ -2026,6 +2048,8 @@ void k4Stop() {
 // still holds - the G#Dim just played in KEYMODE2 is degree 1 here ("C=
 // G#Dim").  No held chord: re-anchor on the stored step before the focus
 void k4Enter() {
+  k4SeedOnce();               // this boot's draw: entered on a key press, so
+                              // the clock carries entropy the boot cannot
   sChain = false;
   sChainSd = 255;
   if (chordCount() > 0) {
