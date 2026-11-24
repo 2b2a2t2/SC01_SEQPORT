@@ -63,7 +63,7 @@ selected track's 16 clip slots, or the 16 tracks with `PREV` held). Its knobs se
 per-CC-per-channel memory are untouched.
 
 Page rows (ARP sub-pages, BASS option radios, the strum ADDS row, the DRUM knob sets,
-COMP/HARM/SKANK/LEAD pages) are themselves overlays: they take the whole encoder row while
+COMP/HARM/SKANK/DRIFT/LEAD pages) are themselves overlays: they take the whole encoder row while
 armed, and return the base row when released or when the page closes. Their knobs are
 documented on each page — see [Generators](../generators/arp.md).
 

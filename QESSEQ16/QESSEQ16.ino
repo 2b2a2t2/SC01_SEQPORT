@@ -314,6 +314,7 @@ void loop() {
   pollSeqClock();
   harmRebakePoll();   // HARM tracks re-bake after feeder changes: the draw
                       // below shows the re-derived steps (Keyboard.cpp)
+  driftPoll();        // ...and DRIFT tracks re-derive their progression
   displayUpdate();
   uint32_t t4 = micros();
   seqDiagNote(3, t4 - t3);

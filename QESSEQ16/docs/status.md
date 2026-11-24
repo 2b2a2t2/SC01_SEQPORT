@@ -54,6 +54,7 @@ A blank means the feature predates the initial import or cannot be attributed to
 | COMP chord stabs | SEQ, POLY/STEP | Stable | 2026-10-22 | ENC2–4 reserved |
 | HARM progression inference (Viterbi over genres) | SEQ, POLY/HARM | Stable | 2026-10-20 | Re-bakes when the feeder changes |
 | SKANK walking voicings | SEQ, POLY/SKANK | Stable | 2026-10-22 | Eight knobs + per-step locks (RAM only) |
+| DRIFT derived progression (feeder chords → second progression) | SEQ, POLY/DRIFT | **Beta** | 2026-11-24 | Compiled, not yet auditioned on hardware; page settings RAM only |
 | HAND strum zone | KEY, POLY/HAND | Stable | 2026-10-07 | Pink→seagreen string gradient, black keys are option toggles |
 | 18 preset drum styles | SEQ, DRUM | Stable | 2026-10-25 | Style list is independent of the progression genre |
 

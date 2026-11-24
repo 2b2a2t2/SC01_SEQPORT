@@ -9,6 +9,7 @@
 #include "Gen.h"        // BASS params (the SEQ EEPROM block stores them)
 #include "Encoders.h"   // encDrain - accelerated 0-100% dials
 #include "Skank.h"      // SKANK derive (POLY TYPE = SKANK playback)
+#include "Drift.h"      // DRIFT derive (POLY TYPE = DRIFT bake/step chord)
 #include "Drum.h"       // DRUM page params (the SEQ EEPROM block stores them)
 #include "Encoders.h"   // encSetChannel - boot reconcile of a locked ENCOD
 #include "bjorklund.h"  // COMP: Euclid stab pattern (same primitive as BASS)
@@ -424,6 +425,40 @@ void harmRebakePoll() {
   seqEditCh = saved;
 }
 
+// DRIFT auto re-derive: a write to a feeder marks every POLY+DRIFT track
+// that follows it, and driftPoll (main loop, next to harmRebakePoll) runs
+// the marks - a burst of feeder writes costs one derive pass, not one per
+// step.  Only stored content and length mark: the block map counts steps,
+// so a feeder SPEED change never re-derives anything
+static bool sDriftDirty[SEQ_CH_COUNT];
+static bool sDriftDirtyAny = false;
+
+void driftFeederChanged(uint8_t ch0) {
+  if (ch0 >= SEQ_CH_COUNT) return;
+  for (uint8_t w = 0; w < SEQ_CH_COUNT; w++) {
+    if (w == ch0) continue;                    // never self (edits stand)
+    if (seqInCh[w] != (uint8_t)(ch0 + 1)) continue;   // its SRC points at ch0
+    if (seqTrackOf(w) != SEQ_TRACK_POLY || seqPolyTypeOf(w) != SEQ_POLY_DRIFT)
+      continue;
+    if (!seqFollowOf(w)) continue;             // FOLLOW gates the source
+    sDriftDirty[w] = true;
+    sDriftDirtyAny = true;
+  }
+}
+
+void driftPoll() {
+  if (!sDriftDirtyAny) return;
+  sDriftDirtyAny = false;
+  uint8_t saved = seqEditCh;
+  for (uint8_t y = 0; y < SEQ_CH_COUNT; y++) {
+    if (!sDriftDirty[y]) continue;
+    sDriftDirty[y] = false;
+    seqEditCh = y;
+    driftRebake();
+  }
+  seqEditCh = saved;
+}
+
 // timeline adaptation: when track x's step chords are written, every MONO
 // or POLY sequence listening to x's channel (input channel = x+1) re-derives
 // its ACTIVE steps from x's timeline - each takes the last chord at or before
@@ -435,6 +470,7 @@ void harmRebakePoll() {
 static void stepSyncFrom(uint8_t x) {
   if (x >= SEQ_CH_COUNT) return;
   harmFeederChanged(x);        // HARM tracks feeding from x re-derive (deferred)
+  driftFeederChanged(x);       // ...and so do DRIFT tracks
   for (uint8_t y = 0; y < SEQ_CH_COUNT; y++) {
     if (y == x || seqInCh[y] != x + 1) continue;
     uint8_t ltr = seqTrackOf(y);
@@ -444,8 +480,13 @@ static void stepSyncFrom(uint8_t x) {
     // bake chords), so its baked steps must not be clobbered by a later
     // write to the feeder (otherwise a bass re-record would stamp its raw
     // single notes over the inferred triads).  It re-bakes instead - see
-    // harmFeederChanged above, which marked it when x changed
-    if (ltr == SEQ_TRACK_POLY && seqPolyTypeOf(y) == SEQ_POLY_HARM) continue;
+    // harmFeederChanged above, which marked it when x changed.  A POLY
+    // track with TYPE = DRIFT is excluded for the same reason: its input
+    // channel is only the source of the derived progression, so it
+    // re-derives (driftFeederChanged) instead of mirroring raw chords
+    if (ltr == SEQ_TRACK_POLY &&
+        (seqPolyTypeOf(y) == SEQ_POLY_HARM ||
+         seqPolyTypeOf(y) == SEQ_POLY_DRIFT)) continue;
     bool changed = false;
     for (uint8_t n = 0; n < STEP_MAX; n++) {
       if (stepChordLen[y][n] == 0) continue;   // never creates active steps
@@ -461,6 +502,7 @@ static void stepSyncFrom(uint8_t x) {
     if (changed) {
       seqOctClamp(y);           // content changed -> re-clamp
       harmFeederChanged(y);     // cascade: A -> B (mirror) -> HARM feeding B
+      driftFeederChanged(y);    // ...and DRIFT feeding B
     }
   }
 }
@@ -808,6 +850,16 @@ static void octTrackStash(uint8_t s, bool d, int8_t o) {
   if (s >= SEQ_CH_COUNT) return;
   if (d) { octDrum[s] = o; octDrumSeen[s] = true; }
   else   { octPitch[s] = o; octPitchSeen[s] = true; }
+}
+
+// per-track KEYMODE octave of a sequence (1-based), read WITHOUT the keyboard
+// having to sit on that track: the HARM bake/follow register is the octave of
+// the HARM track's own channel, never whichever track the keyboard is on (a
+// track never visited keeps the default 3 - HARM is POLY, so the pitched row)
+int keyOctaveOf(uint8_t ch) {
+  if (ch < 1 || ch > SEQ_CH_COUNT) return KEY_OCT_DEF;
+  uint8_t s = (uint8_t)(ch - 1);
+  return octPitchSeen[s] ? octPitch[s] : KEY_OCT_DEF;
 }
 
 void keyOctTrackPoll() {
@@ -1341,6 +1393,16 @@ int stepChordPress(uint8_t step) {
         if (hn2 > 0) { src = hnotes; n = (uint8_t)hn2; }
       }
       // else: FOLLOW off / source empty up to here - keep pending (above)
+    } else if (seqPolyType() == SEQ_POLY_DRIFT) {
+      // DRIFT, no held gesture: with FOLLOW on, record the chord the engine
+      // places on this step (its derived progression), never the feeder's
+      // raw chord - the same rule HARM has.  FOLLOW off = the source is the
+      // track's own chords, so the pending gesture above stands
+      if (seqFollow()) {
+        static uint8_t dnotes[CHORD_MAX];
+        int dn = driftStepChord(step, dnotes);
+        if (dn > 0) { src = dnotes; n = (uint8_t)dn; }
+      }
     } else {
       // a POLY follower mirrors its input timeline (raw source content)
       uint8_t x = seqInCh[seqEditCh] - 1;        // the INPUT track
@@ -1362,7 +1424,8 @@ int stepChordPress(uint8_t step) {
     // A HARM track only READS the feeder while FOLLOW is on, so with FOLLOW
     // off the empty input is not the reason (it wants a held/pending chord)
     bool harmOwn = seqTrack() == SEQ_TRACK_POLY &&
-                   seqPolyType() == SEQ_POLY_HARM && !seqFollow();
+                   (seqPolyType() == SEQ_POLY_HARM ||
+                    seqPolyType() == SEQ_POLY_DRIFT) && !seqFollow();
     uint8_t x = (uint8_t)(seqInCh[seqEditCh] - 1);
     stepRecWarn = (!harmOwn && x < SEQ_CH_COUNT && x != seqEditCh &&
                    !trackHasNotes(x)) ? "Feeder track empty"
@@ -3474,13 +3537,14 @@ static void seqAdvanceOnce(bool start, const bool *go,
     // FOLLOW: the own active step gates the rhythm, the NOTES are read
     // from the feeding track's current playhead (MONO/POLY listener with
     // its input pointing at another track; no feeder / DRUM = unchanged)
-    // ...but a POLY track with TYPE = HARM never follows at playback: its
-    // input channel is only the GENERATION source (k4Harm reads it to bake
-    // chords), so it always plays back its own baked steps - otherwise a
-    // follow-on HARM track would replay the feeder's raw bass notes instead
-    // of the triads it inferred
+    // ...but a POLY track with TYPE = HARM or DRIFT never follows at
+    // playback: its input channel is only the GENERATION source (k4Harm /
+    // the DRIFT derive read it to write chords), so it always plays back its
+    // own written steps - otherwise a follow-on track would replay the
+    // feeder's raw notes instead of the chords it derived
     bool harmTrack = seqTrackOf(c) == SEQ_TRACK_POLY &&
-                     seqPolyTypeOf(c) == SEQ_POLY_HARM;
+                     (seqPolyTypeOf(c) == SEQ_POLY_HARM ||
+                      seqPolyTypeOf(c) == SEQ_POLY_DRIFT);
     bool follow = seqFollowOf(c) && seqTrackOf(c) != SEQ_TRACK_DRUM &&
                   seqInCh[c] != (uint8_t)(c + 1) && !harmTrack;
     uint8_t fstp = 0;                  // feeder's step while following
@@ -3663,7 +3727,7 @@ static void seqAdvanceOnce(bool start, const bool *go,
         uint8_t src = seqNotes[fx2][0];
         for (uint8_t i = 1; i < seqLen[fx2]; i++)
           if (seqNotes[fx2][i] < src) src = seqNotes[fx2][i];
-        ln = k4HarmLiveChord(src, live);
+        ln = k4HarmLiveChord(src, (uint8_t)(c + 1), seqInCh[c], live);
         if (ln) {                       // remember for the carry
           for (uint8_t i = 0; i < ln; i++) harmLive[c][i] = live[i];
           harmLiveN[c] = ln;
@@ -5714,7 +5778,10 @@ bool drumPartSelectActive() { return drumPartSel; }
 
 void drumPartSet(uint8_t idx) {
   if (idx >= STEP_COUNT) return;
-  drumPart = 36 + idx;                 // step1 = C1, step16 = D#2
+  uint8_t note = 36 + idx;             // step1 = C1, step16 = D#2
+  if (note == drumPart) return;        // same voice: nothing to land on
+  drumPart = note;
+  stepEditVoiceLand();                 // SEQMODE: back on the STEPS target
 }
 
 uint8_t drumPartNote() { return drumPart; }

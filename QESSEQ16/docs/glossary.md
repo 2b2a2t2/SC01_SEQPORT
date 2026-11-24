@@ -27,7 +27,7 @@ content; the docs say "track" when they mean the whole lane.
 
 **Track type** — `DRUM`, `MONO` or `POLY`. MONO and POLY carry a sub-type (the "transform"
 or "type" knob): MONO is `ROOT` / `BASS` / `ARP` / `STRUM` / `LEAD`, POLY is `STEP` /
-`STRUM` / `HAND` / `HARM` / `SKANK`.
+`STRUM` / `HAND` / `HARM` / `SKANK` / `DRIFT`.
 
 **Pattern length (`LEN`)** — how many steps the track actually plays, up to 64. Different
 lengths per track are the point: that is how polimeter and polyrhythm happen.

@@ -203,6 +203,7 @@ static CRGB seqPageColor() {
   if (seqPolyType() == SEQ_POLY_HARM)  return CRGB(0, 215, 215);  // aqua
   if (seqPolyType() == SEQ_POLY_STEP)  return CRGB(135, 195, 255); // pale sky
   if (seqPolyType() == SEQ_POLY_SKANK) return CRGB(0, 205, 125);  // spring green
+  if (seqPolyType() == SEQ_POLY_DRIFT) return CRGB(210, 0, 235);  // violet
   return CRGB(205, 135, 255);                                     // STRUM / HAND lavender
 }
 // does the edit track own a page on M2?  (POLY+STEP is conditional and is
@@ -215,12 +216,12 @@ static bool seqPagePadHas() {
   }
   uint8_t t = seqPolyType();
   return t == SEQ_POLY_HARM || t == SEQ_POLY_SKANK || t == SEQ_POLY_STRUM ||
-         t == SEQ_POLY_HAND;
+         t == SEQ_POLY_HAND || t == SEQ_POLY_DRIFT;
 }
 static bool seqPagePadOpen() {
   return arpPageActive() || genPageActive() || leadPageActive() ||
          harmPageActive() || compPageActive() || skankPageActive() ||
-         strumFRowActive() || drumPageActive();
+         driftPageActive() || strumFRowActive() || drumPageActive();
 }
 
 static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
@@ -713,7 +714,7 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
     }
     bool pageOwns = arpPageActive() || genPageActive() || leadPageActive() ||
                     harmPageActive() || compPageActive() || skankPageActive() ||
-                    drumPageActive();
+                    driftPageActive() || drumPageActive();
     if ((sel == 0 && !pageOwns && led == groupControls[2]) ||
         (wantF != 0 && led >= groupControls[5] &&
          wantF == (uint8_t)(led - groupControls[5] + 1))) {
@@ -728,8 +729,9 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
   // SEQMODE M2 on a track that owns an encoder page: the pad carries that
   // TRACK TYPE's hue (seqPageColor) and BREATHES while its page is open
   // instead of sitting dim - so DRUM indigo, ARP pink, BASS blue, LEAD sea
-  // green, STRUM/HAND lavender, HARM aqua, COMP pale sky and SKANK spring
-  // green are all tellable apart at a glance, and no page is a blind key
+  // green, STRUM/HAND lavender, HARM aqua, COMP pale sky, SKANK spring
+  // green and DRIFT violet are all tellable apart at a glance, and no page
+  // is a blind key
   // (the F row of the open page wears the same hue: see above).
   // POLY+STEP is the one conditional case: the COMP page is optional, so
   // with it closed the pad keeps its generic M2 look
@@ -750,7 +752,9 @@ static CRGB modeLedHook(uint8_t pad, bool isTouched, CRGB defaultColor) {
   if (modeBase == MODE_SEQ && modeVariant != 3 && led == groupControls[4] &&
       ((seqTrack() == SEQ_TRACK_MONO &&
         (seqMonoType() == SEQ_MONO_BASS || seqMonoType() == SEQ_MONO_LEAD)) ||
-       (seqTrack() == SEQ_TRACK_POLY && seqPolyType() == SEQ_POLY_HARM))) {
+       (seqTrack() == SEQ_TRACK_POLY &&
+        (seqPolyType() == SEQ_POLY_HARM ||
+         seqPolyType() == SEQ_POLY_DRIFT)))) {
     if (isTouched) return CRGB::White;
     return CHSV((uint8_t)(millis() >> 2), 255, 100);  // full cycle ~1s
   }
@@ -1026,6 +1030,20 @@ void pollModeLeds() {
   }
   if (harmActive && (long)(millis() - harmFlip) >= 0) {
     harmFlip = millis() + 30;
+    refreshAllLeds();
+  }
+
+  // M2 DRIFT-page pulse: breathing violet + M3 hue cycle while the DRIFT
+  // page is open (mirrors the HARM pulse driver)
+  static bool driftActive = false;
+  static unsigned long driftFlip = 0;
+  bool driftNow = driftPageActive();
+  if (driftNow != driftActive) {
+    driftActive = driftNow;
+    refreshAllLeds();
+  }
+  if (driftActive && (long)(millis() - driftFlip) >= 0) {
+    driftFlip = millis() + 30;
     refreshAllLeds();
   }
 

@@ -68,15 +68,19 @@ void seqSetMonoType(uint8_t idx, uint8_t m);   // raw set (EEPROM load), clamped
 // same byte as the MONO transform; stale MONO values > 3 read as STEP (the
 // track kind stored alongside disambiguates on load).  SKANK = the track
 // derives each step's voicing live from the FOLLOW feeder (or its own
-// stored chord) - the M2 SKANK page shapes the walk, see Skank.h.  The
-// byte is shared with the MONO types (LEAD = 4), so 4 stays unassigned:
-// a stale MONO/LEAD value keeps reading as STEP and the dial skips it.
+// stored chord) - the M2 SKANK page shapes the walk, see Skank.h.  DRIFT =
+// the track reads the FOLLOW feeder's stored chords as a progression, cuts
+// it into blocks (one chord + how many steps), fits them onto its own
+// steps, writes a related progression on M3 and plays those steps - the M2
+// DRIFT page shapes the answer, see Drift.h.  The byte is shared with the
+// MONO types (LEAD = 4), so 4 stays unassigned: a stale MONO/LEAD value
+// keeps reading as STEP and the dial skips it.
 enum SeqPolyType : uint8_t { SEQ_POLY_STEP = 0, SEQ_POLY_STRUM = 1,
                              SEQ_POLY_HAND = 2, SEQ_POLY_HARM = 3,
-                             SEQ_POLY_SKANK = 5 };
+                             SEQ_POLY_SKANK = 5, SEQ_POLY_DRIFT = 6 };
 void seqPolyTypeAdjust(int16_t counts);  // edit channel; 4 counts = 1 step, no wrap
 uint8_t seqPolyType();                   // edit channel, clamped (4 = stale reads STEP)
-const char* seqPolyTypeName();           // "STEP" / "STRUM" / "HAND" / "HARM" / "SKANK"
+const char* seqPolyTypeName();           // "STEP" / "STRUM" / "HAND" / "HARM" / "SKANK" / "DRIFT"
 uint8_t seqPolyTypeOf(uint8_t idx);      // sequence idx 0..15, clamped (stale 4 -> STEP)
 
 // ARP options (SEQMODE M2 page, edit track must be MONO + TYPE=ARP):

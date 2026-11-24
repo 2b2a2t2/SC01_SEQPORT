@@ -12,6 +12,7 @@
 #include "Key4.h"       // KEYMODE4 controls (focus/apply/undo/locks)
 #include "Gen.h"        // BASS generator params / produce / rotate
 #include "Skank.h"      // SKANK page: shape name for the header
+#include "Drift.h"      // DRIFT page: knobs + M3 derive/write
 #include "Settings.h"    // device settings page: the header tap owns the row
 #include "Drum.h"       // DRUM page: genre/var/lane params + produce
 #include "Link.h"       // ENCABLETONMODE bridge (clips, tracks, Live params)
@@ -104,6 +105,24 @@ static void stepEditSet(bool on, uint8_t target) {
 
 bool    stepEditIsOn() { return stepEditOn; }
 uint8_t stepEditSel()  { return stepEditTarget; }
+
+// Picking another drum voice lands back on STEPS with the radio on: the
+// attribute target you had armed for the voice you were editing (ACCENT /
+// PROB / RATCHET) belongs to that voice, so it must not silently carry over
+// onto the one you just picked - you land ready to place the new voice's
+// steps.  Unlike stepEditLand the target is reset even when the radio is
+// already on.  Called from drumPartSet (Keyboard.cpp), the single funnel
+// every voice pick goes through (M1 part-select overlay and the keyboard
+// pad), and a no-op outside SEQMODE
+void stepEditVoiceLand() {
+  if (modeBase != MODE_SEQ || modeVariant == 3) return;
+  if (seqTrack() != SEQ_TRACK_DRUM) return;
+  if (stepEditOn && stepEditTarget == 0) return;   // already editing steps
+  stepEditSet(true, 0);
+  if (logRoom(48)) Serial.println("  edit on (drum voice -> steps)");
+  refreshAllLeds();
+  refreshMainScreen();
+}
 uint8_t stepFxSel()    { return stepFxType; }
 const char* stepFxSelName() { return stepFxName(stepFxType); }
 
@@ -340,6 +359,30 @@ static bool skankTrackCtx() {
 void skankPageToggle() { skankPageOn = !skankPageOn; }
 void skankPageDismiss() { skankPageOn = false; }
 bool skankPageActive()  { return skankPageOn && skankTrackCtx(); }
+
+// --- SEQMODE M2 "DRIFT" page (variants 1/2/4) ------------------------------
+// Clicking M2 on a POLY+DRIFT edit track rebinds the encoder row to the
+// derivation: F1 BASE = GENRE / FILL / HOW / ANCHOR, F2 VOICE = SHAPE /
+// SIZE / VOICE / INV (this engine's own values, HARM's bank is untouched),
+// F3 FIT = SPAN / READ / RHYTHM, F4 = APPLY (re-harmonise the steps in use).
+// M3 tap derives the progression from the FOLLOW feeder's stored chords and
+// writes it into the track's steps,
+// M3 hold undoes.  A settings turn re-derives the steps already in use
+// (active only, unchanged steps skipped) so the page is audible while open;
+// M3 is the undoable write.  Composite active check like the other pages
+static bool driftPageOn = false;
+static uint8_t driftSetSel = 0;        // 0 BASE, 1 VOICE, 2 FIT
+
+static bool driftTrackCtx() {
+  return modeBase == MODE_SEQ && modeVariant != 3 &&
+         seqTrack() == SEQ_TRACK_POLY && seqPolyType() == SEQ_POLY_DRIFT;
+}
+
+void driftPageToggle() { driftPageOn = !driftPageOn; driftSetSel = 0; }
+void driftPageDismiss() { driftPageOn = false; driftSetSel = 0; }
+bool driftPageActive()  { return driftPageOn && driftTrackCtx(); }
+uint8_t driftSetSelGet() { return driftPageActive() ? driftSetSel : 0; }
+void driftSetSelSet(uint8_t s) { driftSetSel = (s <= 2) ? s : 0; }
 
 // --- SEQMODE M2 "DRUM" page (variants 1/2/4) --------------------------------
 // Clicking M2 on a DRUM edit track opens the pattern page (indigo pad): the
@@ -1229,6 +1272,42 @@ void handleButtonEvents() {
       refreshAllLeds();
       refreshMainScreen();
     } else
+    // DRIFT page (open via M2): F1 = BASE (GENRE / FILL / HOW / ANCHOR),
+    // F2 = VOICE (SHAPE / SIZE / VOICE / INV), F3 = FIT (SPAN / READ /
+    // RHYTHM), F4 = APPLY (an action, not a bank).  Clicking the armed bank
+    // again returns to BASE; the claim
+    // sits before the step-edit radio, so the open page owns the F row
+    if (ev == EV_CLICKED && driftPageActive() &&
+        kl >= groupControls[5] && kl <= groupControls[8]) {
+      uint8_t idx = (uint8_t)(kl - groupControls[5]);      // 0..3
+      if (idx <= 2) {
+        uint8_t want = (driftSetSelGet() == idx) ? 0 : idx;
+        driftSetSelSet(want);
+        static const char *const bn[3] = { "Drift", "Drift Voicing",
+                                           "Drift Fit" };
+        headerShow(bn[want]);
+        if (logRoom(48)) {
+          Serial.print("  drift set ");
+          Serial.println(bn[want]);
+        }
+      } else {
+        // F4 APPLY: the pass a feeder edit runs, on demand - fit the answer
+        // onto the steps this track already uses and leave its activation and
+        // rhythm alone.  Undoable, because it is an explicit write
+        int w = driftApply();
+        char ab[32];
+        if (w > 0)
+          snprintf(ab, sizeof(ab), "Fitted %d Steps", w);
+        else
+          snprintf(ab, sizeof(ab), "No Feeder");
+        headerShow(ab);
+        refreshAllLeds();          // the step LEDs follow the new chords
+        refreshMainScreen();
+        if (logRoom(48)) { Serial.print("  "); Serial.println(ab); }
+      }
+      refreshAllLeds();
+      refreshMainScreen();
+    } else
     // F1-F4 in SEQMODE (MONO): pick the edit target and switch the radio
     // on (TIE/GLIDE/ACCENT/PROB).  DRUM/POLY tracks only take ACCENT/PROB
     // from F3/F4 - clicking the selected one again closes the radio there;
@@ -1603,6 +1682,27 @@ void handleButtonEvents() {
         }
         refreshAllLeds();
         refreshMainScreen();
+      } else if (ev == EV_CLICKED && driftTrackCtx()) {
+        // SEQMODE 1/2/4 + POLY/DRIFT: M2 clicks the DRIFT encoder page on/off.
+        // Opening it drops the M1 edit radio - the two keys are mutually
+        // exclusive (M1's toggle closes this page instead)
+        driftPageToggle();
+        if (driftPageActive()) {
+          if (stepEditIsOn()) {
+            stepEditSet(false, 0);
+            if (logRoom(48)) Serial.println("  edit off (drift open)");
+          }
+        } else {
+          stepChainDisarm();           // the F row leaves too
+          stepEditLand();              // ...and the page hands back step edit
+        }
+        headerShow(driftPageActive() ? "Drift" : "Drift off");
+        if (logRoom(48)) {
+          Serial.print("  drift page ");
+          Serial.println(driftPageActive() ? "on" : "off");
+        }
+        refreshAllLeds();
+        refreshMainScreen();
       } else if (ev == EV_CLICKED && compTrackCtx()) {
         // SEQMODE 1/2/4 + POLY/STEP: M2 clicks the COMP encoder page on/off
         compPageToggle();
@@ -1942,6 +2042,33 @@ void handleButtonEvents() {
         if (logRoom(48)) {
           Serial.print("  ");
           Serial.println(hb);
+        }
+      } else if (ev == EV_HOLD) {
+        int u = stepSnapshotRestore();
+        headerShow(u == 0 ? "Undo" : "Nothing To Undo");
+        refreshAllLeds();
+        refreshMainScreen();
+        if (logRoom(48))
+          Serial.println(u == 0 ? "  undo" : "  nothing to undo");
+      }
+    }
+
+    // DRIFT (SEQMODE 1/2/4 + POLY/DRIFT): M3 tap = read the FOLLOW feeder's
+    // stored chords as a progression, answer it and write the result into
+    // this track's steps; M3 hold = undo - the shared one-level step
+    // snapshot, like BASS / LEAD / HARM / DRUM
+    if (modeBase == MODE_SEQ && modeVariant != 3 && driftTrackCtx() &&
+        k4ci == 4) {
+      if (ev == EV_CLICKED) {
+        int w = driftBake();
+        char db[32];
+        snprintf(db, sizeof(db), "Drift %d Steps", w > 0 ? w : 0);
+        headerShow(db);
+        refreshAllLeds();       // the step LEDs follow the new progression
+        refreshMainScreen();
+        if (logRoom(48)) {
+          Serial.print("  ");
+          Serial.println(db);
         }
       } else if (ev == EV_HOLD) {
         int u = stepSnapshotRestore();
@@ -3620,6 +3747,64 @@ void handleEncoderEvents() {
             k4HarmHoldAdjust(ed);
             headerAnnounce("Hold", k4HarmHoldName());
           }
+        // M2 DRIFT page: three banks of four knobs (F1 BASE = genre / fill /
+        // how / anchor, F2 VOICE = shape / size / voice / inv, F3 FIT = span /
+        // read).  A settings turn re-derives the steps the track already
+        // uses so the page is audible while it is open; only M3 takes the
+        // undo snapshot
+        } else if (ed != 0 && driftPageActive() && ei < 4) {
+          uint8_t set = driftSetSelGet();
+          // RHYTHM decides which steps carry a chord, so that one knob re-lays
+          // the pattern (an explicit, undoable write) instead of re-deriving
+          // the steps already in use
+          bool relay = false;
+          if (set == 1) {
+            if (ei == 0) {
+              driftShapeAdjust(ed);
+              headerAnnounce("Shape", driftShapeName());
+            } else if (ei == 1) {
+              driftSizeAdjust(ed);
+              headerAnnounce("Size", driftSizeName());
+            } else if (ei == 2) {
+              driftSpreadAdjust(ed);
+              headerAnnounceInt("Voice", driftSpread(), " oct");
+            } else {
+              driftInvAdjust(ed);
+              headerAnnounce("Inversion", driftInvName());
+            }
+          } else if (set == 2) {
+            if (ei == 0) {
+              driftSpanAdjust(ed);
+              headerAnnounce("Span", driftSpanName());
+            } else if (ei == 1) {
+              driftReadAdjust(ed);
+              headerAnnounce("Read", driftReadName());
+            } else if (ei == 2) {
+              uint8_t before = driftRhythm();
+              driftRhythmAdjust(ed);
+              relay = (driftRhythm() != before);
+              headerAnnounce("Rhythm", driftRhythmName());
+            }
+          } else {
+            if (ei == 0) {
+              k4GenreAdjust(ed);
+              headerAnnounce("Genre", k4GenreName());
+            } else if (ei == 1) {
+              seqGenFillAdjust(ed);          // FILL% of the DRIFT track itself
+              headerAnnounceInt("Fill",
+                                seqGenFillOf((uint8_t)(seqEditChannel() - 1)), "%");
+            } else if (ei == 2) {
+              driftHowAdjust(ed);
+              headerAnnounce("How", driftHowName());
+            } else {
+              driftAnchorAdjust(ed);
+              headerAnnounceInt("Anchor", driftAnchor(), "%");
+            }
+          }
+          if (relay) driftRelay();   // rhythm change: re-lay, undoable
+          else driftRebake();        // live: active steps only, no snapshot
+          refreshAllLeds();
+          refreshMainScreen();
         } else if (ed != 0 && drumPageActive()) {
           // DRUM page (M2 on a DRUM track): the armed F set picks which
           // parameter each encoder drives - 0xFF = the base row (GENRE /
@@ -3973,6 +4158,8 @@ void handleEncoderEvents() {
           if (seqPolyType() != SEQ_POLY_STEP) compPageDismiss();  // left STEP
           if (seqPolyType() != SEQ_POLY_SKANK)
             skankPageDismiss();   // left SKANK
+          if (seqPolyType() != SEQ_POLY_DRIFT)
+            driftPageDismiss();   // left DRIFT
           if (stepEditLand()) refreshAllLeds();   // type moved: back to step edit
           headerAnnounce("Poly Type", seqPolyTypeName());
           if (logRoom(48)) {

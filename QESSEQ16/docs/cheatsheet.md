@@ -79,7 +79,7 @@ number must stay in CC 1–36 (the size of the per-CC-per-channel value store).
 | Tap an **F** | Arm that sub-page; the whole encoder row becomes its knobs |
 | Tap the armed F again | Release, back to the plain row |
 | Tap **M1** | Step-edit radio (targets TIE / GLIDE / ACCENT / PROB — DRUM adds RATCHET on **F2**, POLY adds FX / TYPE — and lets ENC2–4 turn `LISTEN` / `PLAY` / `OVERDUB`) |
-| Tap **M2** | The track-type page (BASS, LEAD, ARP, COMP, HARM, SKANK, DRUM styles, strum ADDS) |
+| Tap **M2** | The track-type page (BASS, LEAD, ARP, COMP, HARM, SKANK, DRIFT, DRUM styles, strum ADDS) |
 | Hold **M2** | Overdub-layer panel on the keyboard row: C D E F = layers 1–4, C# = mute (always armed) / D# = erase (white key confirms), F# / G# / A# = undo / redo / reset layers |
 | Tap **M3** | Generate (page open) / re-roll (drum page) / page group (ENCMODE) |
 | Hold **M3** | Undo one level (generators, drum page) |
@@ -136,7 +136,7 @@ Wide stepped ranges (PAT LEN, VEL, the per-step OCT/BRW/PROB) keep 4 counts per 
 
 Page hues (dim = page closed, breathing = open): **indigo** DRUM · **pink** ARP ·
 **blue** BASS · **sea green** LEAD · **lavender** strum · **aqua** HARM ·
-**pale sky** COMP (lit only while open) · **spring green** SKANK.
+**pale sky** COMP (lit only while open) · **spring green** SKANK · **violet** DRIFT.
 Red, orange and yellow are reserved; do not expect a track hue there.
 
 ## Header messages

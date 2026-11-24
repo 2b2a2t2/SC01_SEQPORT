@@ -330,6 +330,9 @@ bool handLive();
 // every track keeps its own octave
 bool keyDrumTrack();
 void keyOctTrackPoll();            // per-track KEYMODE octave swap (loop)
+int  keyOctaveOf(uint8_t ch);      // per-track octave of sequence ch (1-based,
+                                   // default 3) - readable without the
+                                   // keyboard sitting on that track
 
 // strum options - the black keys while handLive() (tap toggles, RAM only,
 // booted as SUS+SUSCOMMON): Le Strum's set ported from StrumController.c
@@ -447,9 +450,10 @@ int            stepChordWriteKeepAtt(uint8_t step, const uint8_t *notes,
                                                   // a live re-voice moves only
                                                   // the pitches
 const uint8_t* stepChordAt(uint8_t step, uint8_t *len);    // stored chord (edit seq)
-// HARM (Key4.cpp reads the feeder bassline): the input channel the edit
+// HARM (Key4.cpp reads the feeder bassline) and DRIFT (Drift.cpp reads the
+// feeder's stored chords as a progression): the input channel the edit
 // channel follows (1-based, 0 = none/self) and a channel-targeted step
-// reader so the harmonizer can read another track's stored notes
+// reader so both can read another track's stored notes
 uint8_t        seqFeederChannel();
 const uint8_t* stepChordAtCh(uint8_t ch, uint8_t step, uint8_t *len);
 // FOLLOW FREEZE: latch the chord/note the feeder is sounding at this instant
@@ -471,6 +475,12 @@ bool           stepChordSame(uint8_t step, const uint8_t *notes, uint8_t n);
 // a burst of feeder writes costs one Viterbi pass instead of one per step
 void           harmFeederChanged(uint8_t ch0);
 void           harmRebakePoll();
+// DRIFT auto re-derive: driftFeederChanged marks every POLY+DRIFT track
+// that follows ch0; driftPoll runs the marked derives once per loop pass
+// (QESSEQ16.ino, next to harmRebakePoll) - content and length only, never
+// the feeder's speed
+void           driftFeederChanged(uint8_t ch0);
+void           driftPoll();
 
 // BASS generator write path (Gen.cpp drives it): one note per step,
 // stamped like stepChordWrite (octave pre-compensated, followers and the

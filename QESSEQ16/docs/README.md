@@ -55,6 +55,7 @@ docs/
 │   ├── comp.md            chord stabs
 │   ├── harm.md            progression inference
 │   ├── skank.md           walking voicings
+│   ├── drift.md           second progression from a feeder's chords
 │   ├── hand-strum.md      strummed pads (POLY TYPE = HAND)
 │   └── drum-styles.md     18 preset drum styles
 ├── reference/

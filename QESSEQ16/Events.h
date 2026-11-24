@@ -134,6 +134,8 @@ void cfgStoreCommit();
 bool    stepEditIsOn();
 uint8_t stepEditSel();
 bool    stepEditActive();
+void    stepEditVoiceLand();   // a drum-voice pick lands back on STEPS (radio
+                               // on, target reset) - called by drumPartSet
 uint8_t stepFxSel();    // selected FX type for the FX target (StepFxType,
                         // 0..6 - which FX the pads/ENC7 edit)
 const char* stepFxSelName();  // its display name (sus2 ... color)
@@ -250,6 +252,19 @@ bool compPageActive();
 void skankPageToggle();
 void skankPageDismiss();
 bool skankPageActive();
+
+// SEQMODE M2 (variants 1/2/4) on a POLY+DRIFT edit track: a click toggles
+// the DRIFT encoder page - F1 BASE (GENRE / FILL / HOW / ANCHOR), F2 VOICE
+// (SHAPE / SIZE / VOICE / INV), F3 FIT (SPAN / READ / RHYTHM), F4 = APPLY
+// (re-harmonise the steps already in use, keeping the track's rhythm).  M3 tap
+// derives the progression from the FOLLOW feeder's stored chords and writes
+// it into this track's steps, M3 hold undoes.  Same radio rules as HARM:
+// opening it drops the M1 edit radio, a channel / TYPE / mode switch drops it
+void driftPageToggle();
+void driftPageDismiss();
+bool driftPageActive();
+uint8_t driftSetSelGet();          // 0 BASE, 1 VOICE, 2 FIT
+void driftSetSelSet(uint8_t s);
 
 // SEQMODE M2 (variants 1/2/4) on a DRUM edit track: a click toggles the DRUM
 // pattern page (indigo pad).  The row is eight knobs - GENRE, VAR, FILL %,

@@ -41,6 +41,13 @@ from the feeder's sounding note. Derived notes never rewrite the pattern, so cha
 harmony is non-destructive and reversible — and a pattern stays the same object whether it
 is being followed or not.
 
+**DRIFT is the deliberate exception.** It answers a feeder's *stored* progression with a new
+one, and writes that answer into its own steps on `M3` (one undo snapshot, and the automatic
+update after a feeder edit only touches steps already in use). A send-time DRIFT would store
+nothing, so a third track would have nothing to read; writing is what makes
+`A → DRIFT B → DRIFT C` a chain instead of two independent listeners. See
+[ADR 0009](adr/0009-drift-baked-progression.md).
+
 The corollary: a follower hears what the feeder *plays*, not what the feeder *stored*.
 Mute is an output gate only, so a muted feeder still feeds.
 
@@ -49,7 +56,8 @@ Mute is an output gate only, so a muted feeder still feeds.
 Any track can be read by another: point the reader's input channel at the feeder and turn
 `FOLLOW` on. One level, non-recursive — A can follow B, but A is never read by C *through*
 B. Chains are built by pointing each reader at a real track, not by daisy-chaining
-listeners.
+listeners. A DRIFT track's answer is stored, so it is a normal feeder for the next link
+(`A → DRIFT B → DRIFT C`): each link is pointed at a real track, and the write cascades.
 
 ## 7. Three tiers of state
 

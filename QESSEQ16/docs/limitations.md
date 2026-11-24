@@ -49,6 +49,17 @@ These are documented because they surprise people, not because they are bugs.
 - **An EEPROM save from an older build loads with defaults for the new fields**, except
   `ENC 4 + REC`, where an older block is ignored entirely.
 - **ROOT / ARP take OCT but not MAP/BRW**; STRUM's rake takes neither.
+- **DRIFT's `BLOCK` rhythm depends on the track's GATE.** `POLY` holds a chord only for the step's
+  gate and cannot sustain across steps, so `RHYTHM = BLOCK` writes one chord per block and leaves
+  the rest empty; a short gate makes that a short chord rather than a held one, and a long gate is
+  what lets the block ring. `FILL` stays available when a busier rhythm is wanted.
+- **DRIFT maps steps, not time.** A slow feeder does not stretch the answer: the derived loop
+  keeps the DRIFT track's own speed. To follow a 4-step `1/64` feeder's 16-bar arc, set the
+  DRIFT track to `1/16` with `SPAN = 4` (one step per bar, four bars per derived chord).
+- **DRIFT reads stored chords only.** A SKANK feeder's send-time walk, a probability miss or an
+  arp's current note are invisible to it — only what the feeder stores is answered.
+- **DRIFT page settings are RAM only** (like HARM's), and type value `6` reads as `STEP` on a
+  firmware built before DRIFT existed.
 
 ## Tooling gaps
 

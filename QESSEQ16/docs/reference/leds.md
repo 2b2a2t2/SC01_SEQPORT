@@ -23,10 +23,11 @@ SEQMODE **M2** opens an encoder page on a track that has one, and the pad carrie
 | **POLY + HARM** | aqua `0,215,215` | [HARM page](../generators/harm.md) |
 | **POLY + STEP** | pale sky `135,195,255` | [COMP page](../generators/comp.md) — only lit while the page is open |
 | **POLY + SKANK** | spring green `0,205,125` | [SKANK page](../generators/skank.md) |
-| MONO + BASS/LEAD, POLY + HARM | **M3** slow hue cycle | the generator button (tap = generate, hold = undo) |
+| **POLY + DRIFT** | violet `210,0,235` | [DRIFT page](../generators/drift.md) |
+| MONO + BASS/LEAD, POLY + HARM/DRIFT | **M3** slow hue cycle | the generator button (tap = generate/write, hold = undo) |
 
 **Red, orange and yellow are reserved** — REC, the drum / encoder MUTE overlays, the variant-3 channel selector and the armed-attribute step pulse already use them — and the step-edit attribute row keeps its **blue** (TIE / GLIDE / ACCENT / PROB). Every track hue therefore lives in the cool arc from spring green through cyan and blue to indigo and pink; two **pale tints** (STRUM lavender, COMP pale sky) buy their separation by lightness instead of hue.
 
 When an M2 page is open, **its F row wears the same hue as the pad** that opened it (ARP sub-pages, BASS option radios, the strum ADDS row, the drum knob sets) — bright for the armed entry, dim for the rest. F pads that a page does not own keep their step-edit blue.
 
-Idle brightness is 64/255 (breathing 64→200); the closest pair in CIELAB at that level is **14.4 ΔE** (HARM aqua vs SKANK spring green), against 0.0 for the duplicates and 8.9 for indigo vs blue before the split.
+Idle brightness is 64/255 (breathing 64→200); the closest pair in CIELAB at that level is **10.9 ΔE** (DRIFT violet vs DRUM indigo), then HARM aqua vs SKANK spring green at 14.4, against 0.0 for the duplicates and 8.9 for indigo vs blue before the split.

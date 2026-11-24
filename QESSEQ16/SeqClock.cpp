@@ -404,23 +404,27 @@ void seqSetMonoType(uint8_t idx, uint8_t m) {
   if (idx >= 16) return;
   // the byte is shared with the POLY types: SEQ_POLY_SKANK (5) rides
   // through on load, everything else clamps into the MONO range
-  if (m > SEQ_MONO_LEAD && m != SEQ_POLY_SKANK) m = SEQ_MONO_LEAD;
+  if (m > SEQ_MONO_LEAD && m != SEQ_POLY_SKANK && m != SEQ_POLY_DRIFT)
+    m = SEQ_MONO_LEAD;
   monoType[idx] = m;
 }
 
 // SEQMODE3 TYPE (ENC7) on a POLY track: the track's default step playback
 // type, stored in the same byte as the MONO transform (0..3, 5 = SKANK,
-// are valid POLY values; a stale 4 from a MONO/LEAD edit reads as STEP and
-// the first adjust snaps back into range).  STEP = chords play as blocks
-// (as before), STRUM = every step is raked with the fixed tempo spread,
-// HAND = the keyboard performs: silent chord build, white keys strum, REC
-// captures the gesture for playback, HARM = the track is a harmonizer (M2
-// HARM page bakes a progression from the FOLLOW feeder's bassline; plays
-// like STEP), SKANK = the track derives every step's voicing live from the
-// feeder's chord (or its own stored chord when FOLLOW points at itself) -
-// the M2 SKANK page shapes the walk, played steps gate the rhythm.  A step
-// can override the playback style per step (F2 TYPE: STEP/STRUM/HAND only
-// - HARM and SKANK are track modes, not per-step styles).
+// 6 = DRIFT are valid POLY values; a stale 4 from a MONO/LEAD edit reads as
+// STEP and the first adjust snaps back into range).  STEP = chords play as
+// blocks (as before), STRUM = every step is raked with the fixed tempo
+// spread, HAND = the keyboard performs: silent chord build, white keys
+// strum, REC captures the gesture for playback, HARM = the track is a
+// harmonizer (M2 HARM page bakes a progression from the FOLLOW feeder's
+// bassline; plays like STEP), SKANK = the track derives every step's
+// voicing live from the feeder's chord (or its own stored chord when
+// FOLLOW points at itself) - the M2 SKANK page shapes the walk, played
+// steps gate the rhythm, DRIFT = the track reads the feeder's stored
+// chords as a progression, writes a related one into its own steps (M2
+// DRIFT page) and plays those.  A step can override the playback style per
+// step (F2 TYPE: STEP/STRUM/HAND only - HARM, SKANK and DRIFT are track
+// modes, not per-step styles).
 static int16_t polyRes = 0;               // leftover encoder counts (own)
 
 void seqPolyTypeAdjust(int16_t counts) {
@@ -436,26 +440,26 @@ void seqPolyTypeAdjust(int16_t counts) {
   // 4 = the stale MONO/LEAD value never lands: step over it (CW from HARM
   // arrives on SKANK, CCW from SKANK falls back to HARM)
   if (t == 4) t = (step > 0) ? SEQ_POLY_SKANK : SEQ_POLY_HARM;
-  if (t > SEQ_POLY_SKANK) t = SEQ_POLY_SKANK;
+  if (t > SEQ_POLY_DRIFT) t = SEQ_POLY_DRIFT;
   monoType[ec] = (uint8_t)t;
   if (wasHand != (seqPolyTypeOf(ec) == SEQ_POLY_HAND)) handRingCut(ec);
 }
 
 uint8_t seqPolyType() {
   uint8_t t = monoType[seqEditChannel() - 1];
-  return (t == 4 || t > SEQ_POLY_SKANK) ? SEQ_POLY_STEP : t;
+  return (t == 4 || t > SEQ_POLY_DRIFT) ? SEQ_POLY_STEP : t;
 }
 
 const char* seqPolyTypeName() {
-  static const char* names[6] = { "STEP", "STRUM", "HAND", "HARM",
-                                  "?", "SKANK" };   // 4 never surfaces
+  static const char* names[7] = { "STEP", "STRUM", "HAND", "HARM",
+                                  "?", "SKANK", "DRIFT" };  // 4 never surfaces
   return names[seqPolyType()];
 }
 
 uint8_t seqPolyTypeOf(uint8_t idx) {
   if (idx >= 16) return SEQ_POLY_STEP;
   uint8_t t = monoType[idx];
-  return (t == 4 || t > SEQ_POLY_SKANK) ? SEQ_POLY_STEP : t;
+  return (t == 4 || t > SEQ_POLY_DRIFT) ? SEQ_POLY_STEP : t;
 }
 
 // --- ARP options (SEQMODE M2 page), per track -----------------------------
@@ -703,6 +707,7 @@ void seqPatLenAdjust(int16_t counts) {
   patLen[ch] = (uint8_t)v;
   harmFeederChanged(ch);   // the feeder window moved: HARM tracks that feed
                            // from this channel re-bake (deferred, loop pass)
+  driftFeederChanged(ch);  // ...and DRIFT tracks re-derive their blocks
 }
 
 // C# / D# presses: one shared write, so both keys get the same 0..64 clamp,
@@ -720,6 +725,7 @@ static void patLenApply(uint8_t ch, uint8_t v) {
     if (seqPage[ch] > last) seqPage[ch] = last;
   }
   harmFeederChanged(ch);   // same feeder-window mark as seqPatLenAdjust
+  driftFeederChanged(ch);
 }
 
 // public form for the clipboard (paste / undo): the same 0..64 clamp, the

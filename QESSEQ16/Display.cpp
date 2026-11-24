@@ -12,6 +12,7 @@
 #include "Gen.h"         // BASS page values (fill/acc/glide/tie)
 #include "Key4.h"       // KEYMODE4 genre/knob values + control legend
 #include "Skank.h"      // SKANK page: shape name (LIN/PP/RND)
+#include "Drift.h"      // DRIFT page: how/span/read + voicing values
 #include "Drum.h"       // DRUM page: genre/var/lane values
 #include "Link.h"       // ENCABLETONMODE: Live track/clip/parameter state
 #include <Wire.h>
@@ -88,6 +89,14 @@ static const char* ctrlLegend(uint8_t i) {
     if (harmPageActive()) {
       static const char* hn[4] = { "BASE", "CHRD", "---", "---" };
       return hn[i - 5];
+    }
+    // SEQMODE + DRIFT page (open with M2 on a POLY DRIFT track): F1 = BASE
+    // (GENRE/FILL/HOW/ANCHOR), F2 = VOICE (SHAPE/SIZE/VOICE/INV), F3 = FIT
+    // (SPAN/READ/RHYTHM), F4 = APPLY (an action, never lit) - wins over the
+    // step-edit legend
+    if (driftPageActive()) {
+      static const char* dn[4] = { "BASE", "VOICE", "FIT", "APPLY" };
+      return dn[i - 5];
     }
     // SEQMODE + MONO step-edit: F1-F4 select TIE/GLIDE/ACCENT/PROB
     if (modeBase == MODE_SEQ && modeVariant != 3 &&
@@ -204,7 +213,7 @@ static void writeLegends() {
   const bool pageOwns = drumPageActive() || arpPageActive() ||
                         genPageActive() || leadPageActive() ||
                         harmPageActive() || compPageActive() ||
-                        skankPageActive();
+                        skankPageActive() || driftPageActive();
   // SEQMODE MONO: M1's label is EDIT - the edit radio's own button.  It is
   // filled while the radio sits on STEPS (target 0); once TIE/GLIDE/... is
   // chosen that F label carries the mark instead, still on the same radio
@@ -226,6 +235,8 @@ static void writeLegends() {
   } else if (harmPageActive()) {
     const uint8_t s = harmSetSelGet();
     if (s < 4) wantF = (uint8_t)(s + 1);
+  } else if (driftPageActive()) {
+    wantF = (uint8_t)(driftSetSelGet() + 1);
   } else if (k4m && k4Tonality()) {
     wantF = (uint8_t)(k4TonaBank() + 1);          // the open TONALITY bank
   } else if (stepEditIsOn()) {
@@ -447,6 +458,10 @@ void refreshMainScreen() {
   // SEQMODE + M2 HARM page (POLY TYPE=HARM): ENC1..4 take genre/fill/src/
   // hold, the other four keep their knobs
   bool harmP = harmPageActive();
+  // SEQMODE + M2 DRIFT page (POLY TYPE=DRIFT): ENC1..4 take the armed bank
+  // (BASE = genre/fill/how/anchor, VOICE = shape/size/voice/inv, FIT = span/
+  // read/rhythm), the other four keep their knobs like the HARM page
+  bool driftP = driftPageActive();
   // SEQMODE + M2 COMP page (POLY TYPE=STEP): ENC1 = HITS, the rest idle
   bool compP = compPageActive();
   // SEQMODE + M2 SKANK page (POLY TYPE=SKANK): ENC1..4 take TES/MOT/SHP/
@@ -526,6 +541,13 @@ void refreshMainScreen() {
         static const char *hl[4] = { "GENRE", "FILL", "SRC", "HOLD" };
         l1 = hl[c];
       }
+    }
+    if (driftP && !seqOv) {
+      static const char *const db[4] = { "GENRE", "FILL", "HOW", "ANCHOR" };
+      static const char *const dv[4] = { "SHAPE", "SIZE", "VOICE", "INV" };
+      static const char *const df[4] = { "SPAN", "READ", "RHYTHM", "---" };
+      uint8_t set = driftSetSelGet();
+      l1 = (set == 1) ? dv[c] : (set == 2) ? df[c] : db[c];
     }
     if (drumP && !seqOv) {
       // base row: GENRE / VAR / FILL / MOT, then the four lane selectors on
@@ -673,7 +695,7 @@ void refreshMainScreen() {
         snprintf(val, sizeof(val), "%u%%",
                  (unsigned)drumLaneMot((uint8_t)c));
       }
-    } else if (modeBase == MODE_SEQ && c == 0 && !compP &&
+    } else if (modeBase == MODE_SEQ && c == 0 && !compP && !driftP &&
                !(arpP && arpSlotAt(arpOptionSel(), 0) >= 0)) {
       if (modeVariant == 4) {
         // variant 4 is the timing screen: ENC1 = the per-track swing style
@@ -682,13 +704,13 @@ void refreshMainScreen() {
         snprintf(val, sizeof(val), "%d", seqOctaveShift()); // ENC1 = octave shift
       }
     } else if (modeBase == MODE_SEQ && c == 1 && modeVariant == 4 && !genP &&
-               !leadP && !harmP && !compP && !skankP && !drumP &&
+               !leadP && !harmP && !compP && !skankP && !drumP && !driftP &&
                !(arpP && arpSlotAt(arpOptionSel(), 1) >= 0)) {
       // variant 4 timing screen: ENC2 = the swing amount (0..100)
       snprintf(val, sizeof(val), "%u%%", seqSwingAmt());
     } else if (modeBase == MODE_SEQ && (c == 2 || c == 3) && modeVariant == 4 &&
                !genP && !leadP && !harmP && !compP && !skankP && !drumP &&
-               !arpP) {
+               !driftP && !arpP) {
       // variant 4 input row: ENC3 = EXT IN mode, ENC4 = source (every page
       // owns these slots when open, so the guard mirrors the plain row)
       if (c == 2)
@@ -744,6 +766,35 @@ void refreshMainScreen() {
         snprintf(val, sizeof(val), "%s", k4HarmInvName());    // ENC4 = inv
       else
         snprintf(val, sizeof(val), "%s", k4HarmHoldName());   // ENC4 = hold
+    } else if (driftP && c == 0) {
+      if (driftSetSelGet() == 1)
+        snprintf(val, sizeof(val), "%s", driftShapeName());   // ENC1 = shape
+      else if (driftSetSelGet() == 2)
+        snprintf(val, sizeof(val), "%s", driftSpanName());    // ENC1 = span
+      else
+        snprintf(val, sizeof(val), "%s", k4GenreShort());     // ENC1 = genre
+    } else if (driftP && c == 1) {
+      if (driftSetSelGet() == 1)
+        snprintf(val, sizeof(val), "%s", driftSizeName());    // ENC2 = size
+      else if (driftSetSelGet() == 2)
+        snprintf(val, sizeof(val), "%s", driftReadName());    // ENC2 = read
+      else
+        snprintf(val, sizeof(val), "%u%%",
+                 seqGenFillOf((uint8_t)(seqEditChannel() - 1))); // ENC2 = fill
+    } else if (driftP && c == 2) {
+      uint8_t set = driftSetSelGet();
+      if (set == 1)
+        snprintf(val, sizeof(val), "%uoct", driftSpread());   // ENC3 = voice
+      else if (set == 0)
+        snprintf(val, sizeof(val), "%s", driftHowName());     // ENC3 = how
+      else
+        snprintf(val, sizeof(val), "%s", driftRhythmName());  // ENC3 = rhythm
+    } else if (driftP && c == 3) {
+      uint8_t set = driftSetSelGet();
+      if (set == 1)
+        snprintf(val, sizeof(val), "%s", driftInvName());     // ENC4 = inv
+      else if (set == 0)
+        snprintf(val, sizeof(val), "%u%%", driftAnchor());    // ENC4 = anchor
     } else if (compP && c == 0) {
       int h = seqCompHits();                                  // ENC1 = hits
       if (h <= 1) snprintf(val, sizeof(val), "off");

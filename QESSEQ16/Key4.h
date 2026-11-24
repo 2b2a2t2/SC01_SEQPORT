@@ -183,7 +183,8 @@ int  k4HarmStepChord(uint8_t step, uint8_t *notes);  // the chord HARM infers
                                 // for ONE step (HARM track step activation with
                                 // no held gesture): same Viterbi the bake uses;
                                 // returns note count (0 = nothing to record)
-uint8_t k4HarmLiveChord(uint8_t note, uint8_t *out);  // LIVE follow: one
+uint8_t k4HarmLiveChord(uint8_t note, uint8_t harmCh, uint8_t feedCh,
+                        uint8_t *out);  // LIVE follow: one
                                 // feeder note that actually PLAYED (post-
                                 // probability) -> the chord of its nearest
                                 // scale degree in the bake register, voiced
@@ -208,6 +209,25 @@ int         k4HarmRevoice();                    // live re-voice the stored
 int  k4Undo();                  // M3 hold: restore the last snapshot
 void k4Stop();                  // leaving KEYMODE4
 void k4Enter();                 // entering: seed from the engine's chord
+
+// --- DRIFT bridge (Drift.cpp): read-only views of the same grammar -------
+// The DRIFT engine derives chords from another track's stored progression,
+// so it needs the KEYMODE4 framework, the transition score and the voicing
+// builder.  These wrappers add no behaviour: they forward to buildFw /
+// fwQuality / scorePc / chordBuildVoiced so the grammar is never copied.
+// The framework is the current KEY + SCALE rooted at keyRoot(), i.e. the
+// same one KEYMODE4 and HARM use.
+uint8_t     k4FwDegree(uint8_t pc, bool *inKey);  // nearest degree (0..6)
+uint8_t     k4FwPc(uint8_t deg);                  // pitch class of degree
+uint8_t     k4FwQualityOf(uint8_t deg);           // diatonic triad quality
+uint32_t    k4TransitionScore(uint8_t prevPc, uint8_t pc, uint8_t pos);
+                                // genre weight of prevPc -> pc at position
+int         k4VoicedChordIn(uint8_t ch, uint8_t rootPc, uint8_t q,
+                            uint8_t size, uint8_t inv, uint8_t spread,
+                            uint8_t shape, uint8_t *out);
+                                // voice rootPc/q in sequence ch's own register
+                                // (its KEYMODE octave + 24); size = triad /
+                                // 7th / 9th, inv/spread/shape as chordBuildVoiced
 
 // --- proposals (LED hook) ---------------------------------------------------
 int8_t k4KeyRank(uint8_t pc);       // 0 = top pick, -1 = not proposed

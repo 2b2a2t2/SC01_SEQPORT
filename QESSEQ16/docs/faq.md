@@ -56,7 +56,7 @@ Symptom first. If your question is "why is it designed like that", it belongs in
 | A header message runs off the right | Messages wider than 21 characters are pinned left | Shorten the message; `tools/header_lint.py` catches it |
 | The legend is missing | ENCMODE 1/2/4 draw no control legend — the dials take the band | [Display](reference/display.md) |
 | A page pad is dim | Dim means the page is closed; breathing means it is open | Press `M2` |
-| Two track hues look alike | They are the closest pair in CIELAB (HARM aqua vs SKANK spring green, 14.4 ΔE) | Check the header |
+| Two track hues look alike | They are the closest pair in CIELAB (DRIFT violet vs DRUM indigo, 10.9 ΔE) | Check the header |
 
 ## Build and flash
 

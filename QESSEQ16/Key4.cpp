@@ -360,18 +360,32 @@ static uint8_t harmExtOf(uint8_t q) {
   return e;
 }
 
+// The register HARM builds its chords in: the HARM track's OWN channel
+// octave (the per-track KEYMODE octave, default 3) plus the feeder
+// sequence's playback octave shift, so shifting the bassline up carries the
+// harmony with it.  Deliberately NOT the live keyboard octave: that belongs
+// to whichever track the keyboard is on, and turning it must never move
+// another track's HARM chords
+static uint8_t harmRoot(uint8_t deg, uint8_t harmCh, uint8_t feedCh) {
+  int oct = keyOctaveOf(harmCh) + seqOctaveShiftOf(feedCh);
+  return (uint8_t)(12 * oct + 24 + sFw[deg]);
+}
+
 // LIVE follow (playback, Keyboard.cpp): one feeder note that actually
 // PLAYED - post-probability, post-fold/arp-walk - becomes the chord of its
 // nearest scale degree in the same register the bake writes, voiced with
 // the F2 SHAPE/SIZE/VOICE/INV settings.  An out-of-scale note snaps to the
 // nearest in-scale degree's chord (FScale philosophy); the diatonic quality
 // is the degree's own (same voicing k4HarmBody bakes), so live chords match
-// stored ones
-uint8_t k4HarmLiveChord(uint8_t note, uint8_t *out) {
+// stored ones.  harmCh/feedCh are 1-based sequence channels: the octave
+// comes from the HARM track's own channel and its feeder, not from the
+// keyboard's current track
+uint8_t k4HarmLiveChord(uint8_t note, uint8_t harmCh, uint8_t feedCh,
+                        uint8_t *out) {
   buildFw();
   uint8_t rootPc = 0, q = CHORD_Q_MAJ;
   uint8_t deg = decodeChord(&note, 1, &rootPc, &q);
-  uint8_t root = (uint8_t)(12 * keyOctave() + 24 + sFw[deg]);
+  uint8_t root = harmRoot(deg, harmCh, feedCh);
   return chordBuildVoiced(root, q, harmExtOf(q), sHarmInv, sHarmSprd,
                           sHarmShape, out);
 }
@@ -833,6 +847,54 @@ static void deriveProposal(uint8_t prev, uint8_t pc, uint8_t prevBass,
   *oQ = q;
   *oExt = ext;
   *oInv = inv;
+}
+
+// ---------------------------------------------------------------------------
+// DRIFT bridge (Drift.h / Drift.cpp)
+// ---------------------------------------------------------------------------
+// DRIFT derives a progression from another track's stored chords, so it has
+// to read the same framework, transition grammar and voicing builder the
+// KEYMODE4 proposals and the HARM bake use.  These forwarders add no
+// behaviour of their own - keeping the grammar in one place is the point
+uint8_t k4FwDegree(uint8_t pc, bool *inKey) {
+  buildFw();
+  uint8_t c = (uint8_t)(pc % 12);
+  if (inKey) *inKey = fwHas(c);
+  return fwDeg(c);
+}
+
+uint8_t k4FwPc(uint8_t deg) {
+  buildFw();
+  return sFw[deg % 7];
+}
+
+uint8_t k4FwQualityOf(uint8_t deg) {
+  buildFw();
+  return fwQuality((uint8_t)(deg % 7));
+}
+
+uint32_t k4TransitionScore(uint8_t prevPc, uint8_t pc, uint8_t pos) {
+  buildFw();
+  uint8_t pd = fwDeg((uint8_t)(prevPc % 12));
+  return scorePc(pd, (uint8_t)(pc % 12), pos, sFw[pd], fwQuality(pd), 255,
+                 K4_PLAN_NONE);
+}
+
+// size 0/1/2 -> no extension / diatonic 7th / 7th + 9th, the same mapping
+// HARM's SIZE knob uses (harmExtOf) but with the caller's value instead of
+// the HARM page state
+int k4VoicedChordIn(uint8_t ch, uint8_t rootPc, uint8_t q, uint8_t size,
+                    uint8_t inv, uint8_t spread, uint8_t shape, uint8_t *out) {
+  uint8_t ext = 0;
+  if (size) {
+    ext = (q == CHORD_Q_MAJ) ? CHORD_EXT_M7 : CHORD_EXT_m7;
+    if (size >= 2) ext |= CHORD_EXT_9;
+  }
+  int oct = keyOctaveOf(ch);
+  int root = 12 * oct + 24 + (int)(rootPc % 12);
+  if (root < 0) root = 0;
+  if (root > 127) root = 127;
+  return chordBuildVoiced((uint8_t)root, q, ext, inv, spread, shape, out);
 }
 
 // weighted pick of the next root pc during generation (0xFF = nobody)
@@ -1653,6 +1715,8 @@ static uint8_t harmConsonance(uint8_t bassPc, uint8_t rootPc, uint8_t q) {
 // the Viterbi; the harmonizer reads the FOLLOW feeder's stored bassline/arp)
 static uint8_t sHarmFeederCh = 0;    // 1-based (0 = none yet)
 static uint8_t sHarmFeederLen = 0;   // feeder pattern length
+static uint8_t sHarmThisCh = 1;      // the HARM track's own channel (1-based):
+                                     // its per-track octave sets the register
 
 // per-step emission for degree d at step t (50 = rest, flat so the
 // transitions decide).  Reads the FEEDER track's stored notes: arp = Mode B
@@ -1708,6 +1772,7 @@ static int harmInferPath(uint8_t *path, bool *has) {
   // HARM page points at), OFF = ignore it and harmonize this track's own
   // notes in place.  The input channel is only HARM's generation source
   // (never its mirror), and only while FOLLOW is on
+  sHarmThisCh = seqEditChannel();
   sHarmFeederCh = seqFollow() ? seqFeederChannel() : seqEditChannel();
   if (sHarmFeederCh < 1) sHarmFeederCh = seqEditChannel();
   sHarmFeederLen = seqPatLenOf((uint8_t)(sHarmFeederCh - 1));
@@ -1828,7 +1893,7 @@ static int k4HarmBody(bool automatic) {
     }
     uint8_t deg = has[st] ? path[st] : carry;
     uint8_t q = fwQuality(deg);
-    uint8_t root = (uint8_t)(12 * keyOctave() + 24 + sFw[deg]);
+    uint8_t root = harmRoot(deg, sHarmThisCh, sHarmFeederCh);
     uint8_t notes[8];
     uint8_t n = chordBuildVoiced(root, q, harmExtOf(q), sHarmInv, sHarmSprd,
                                  sHarmShape, notes);   // F2 voicing bank
@@ -1935,7 +2000,7 @@ int k4HarmStepChord(uint8_t step, uint8_t *notes) {
   }
   if (!any) return 0;             // feeder empty up to here: keep pending
   uint8_t q = fwQuality(deg);
-  uint8_t root = (uint8_t)(12 * keyOctave() + 24 + sFw[deg]);
+  uint8_t root = harmRoot(deg, sHarmThisCh, sHarmFeederCh);
   return chordBuildVoiced(root, q, harmExtOf(q), sHarmInv, sHarmSprd,
                           sHarmShape, notes);   // F2 voicing bank
 }

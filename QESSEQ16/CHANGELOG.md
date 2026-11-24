@@ -6,6 +6,58 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### `DRIFT`: a second progression from an existing one
+
+- **New `POLY` track type `DRIFT`** (type value 6, after `SKANK`): it reads the `FOLLOW` feeder's
+  **stored chords** as a progression, cuts them into blocks (one chord plus how many steps it lasts),
+  fits the blocks onto its own pattern length and writes a related progression into its own steps.
+  `M3` derives and writes (one undo snapshot, the track's `FILL`/`ALGO` rolls the rhythm), `M3` hold
+  undoes. Editing the feeder's notes or length re-derives only the steps the track already uses;
+  the feeder's speed never matters, because the map counts steps, not time.
+- **Three answers** (`M2` → `F1 BASE`, `ENC3 = HOW`): `SAME` repeats the feeder chord through a
+  block, `WALK` lands on it then leads into the next one (the dominant on the last step of a block
+  with room), `REPLY` replaces it with a related chord drawn from the genre grammar while `ANCHOR`
+  keeps the original. `F3 FIT` sets `SPAN` (`AUTO` keeps the feeder's rhythm of chord changes, 1–8
+  forces a fixed block length) and `READ` (`CHRD` reads the whole chord, `ROOT` takes the lowest note
+  as the root). `F2 VOICE` carries this engine's own `SHAPE` / `SIZE` / `VOICE` / `INV`.
+- **`RHYTHM` decides how a block fills its steps** (`M2` → `F3 FIT`, `ENC3`): `BLOCK` puts the chord
+  on a block's first step only and leaves the rest empty, so one block is one chord with air after
+  it — `POLY` holds a chord only for its gate and cannot sustain across steps, so this is what makes
+  the derived progression read as harmony instead of a pile of repeated stabs. `FILL` keeps the old
+  behaviour (the track's `FILL`/`ALGO` roll, the HARM bake's rhythm) and `STAB` puts a chord on every
+  step. `FILL` and `ALGO` only matter under `FILL`. Changing `RHYTHM` re-lays the pattern at once and
+  takes the undo snapshot (the other page knobs keep re-deriving in place), so `M3` hold restores the
+  previous rhythm.
+- **`F4 = APPLY` fits chords to a rhythm you already wrote** (`M2` → DRIFT page): the pass a feeder
+  edit runs, on demand — every step the track already uses gets the chord the engine places there,
+  while its activation and rhythm stay exactly as they are (no `FILL` roll, no step switched on or
+  off, a `BLOCK` track keeps its block interiors). It keeps the current `REPLY` answer and takes the
+  undo snapshot, so `M3` hold restores the previous chords; the header reports `Fitted N Steps`.
+- Chains work because the result is stored: `A → DRIFT B → DRIFT C`. `FOLLOW` off makes a DRIFT
+  track read its own chords instead. The page settings and the written steps are RAM only, like the
+  other generators; an older build reading type 6 shows the track as `STEP`.
+
+### `SEQ` / `DRUM`: picking another voice lands back on step edit
+
+- **A drum-voice pick returns the pads to step edit**: with an attribute target armed (say
+  `PROB`, lines on the snare), choosing another part — the `M1` part-select overlay or a keyboard
+  pad — now comes back on the **`STEPS`** target with the edit radio still on, so the next step tap
+  places the new voice instead of editing the previous voice's attribute. Picking the voice you are
+  already on changes nothing. The reset lives in `stepEditVoiceLand()` (`Events.cpp`) and is called
+  from `drumPartSet()`, the single funnel every voice pick goes through, so it only ever fires in
+  SEQMODE on a DRUM track.
+
+### `HARM`: the chords follow their own track's octave
+
+- **Turning the keyboard octave on one track no longer transposes every `HARM` track**: the
+  harmonizer built its chords in whichever octave the keyboard happened to be on, so a turn on any
+  track moved every HARM track's chords — baked, auto re-baked and live-followed alike. The register
+  is now the **HARM track's own channel octave** (its per-track KEYMODE octave, default 3) plus the
+  **feeder sequence's playback octave shift** (ENC1 on the bass/arp track), so shifting the bassline
+  up carries the harmony with it while an octave turned on an unrelated track leaves the HARM track
+  alone. One new reader, `keyOctaveOf(ch)` in `Keyboard.cpp`, exposes a track's octave without the
+  keyboard sitting on it.
+
 ### `ENVELOPE` / `LFO` filter: framed in its own rectangle
 
 - **The filter graph now sits in a rectangle the size of the `ENC1` cell**: the curve is inset four

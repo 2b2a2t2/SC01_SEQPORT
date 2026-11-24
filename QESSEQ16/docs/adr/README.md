@@ -16,6 +16,7 @@ update the old one's status line.
 | [0006](0006-usb-only-clock.md) | Clock and transport on USB only; DIN carries notes | Accepted |
 | [0007](0007-per-track-length-and-speed.md) | Per-track length and speed (polimeter, polyrhythm) | Accepted |
 | [0008](0008-docs-split.md) | Split the documentation into a landing page and `docs/` | Accepted |
+| [0009](0009-drift-baked-progression.md) | DRIFT writes its derived progression (extends 0005) | Accepted |
 
 ## Writing a new one
 
