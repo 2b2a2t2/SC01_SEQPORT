@@ -16,7 +16,7 @@
     display: inline-block; border: 1px solid #2a2f35; background: #000;
     line-height: 0;
   }
-  canvas { width: 960px; height: 150px; image-rendering: pixelated; display: block; }
+  canvas { width: 960px; height: 130px; image-rendering: pixelated; display: block; }
   .controls {
     margin-top: 16px; display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 22px;
@@ -38,17 +38,17 @@
 </style>
 </head>
 <body>
-<h1>ENCMODE4 &middot; FLAVOR = ENVELOPE &mdash; the 480 &times; 75 row</h1>
+<h1>ENCMODE4 &middot; FLAVOR = ENVELOPE &mdash; the 480 &times; 65 row</h1>
 <p class="note">
   Drawn with the constants and maths of <code>ScreenPanel.cpp</code>: same cell sizes,
   same <code>filterLevel()</code> / <code>envLevel()</code> / <code>expFall()</code>, same pixel sampling
   (one sample per column, <code>lroundf</code>), same gap and readout geometry. Shown at 2&times;;
   each canvas pixel is one panel pixel. The caption font is a stand-in for the embedded
-  10&nbsp;px Nasalization bitmap, so text will look slightly different on the panel.
+  12&nbsp;px Nasalization bitmap, so text will look slightly different on the panel.
 </p>
 
 <div class="row-wrap">
-  <canvas id="row" width="480" height="75"></canvas>
+  <canvas id="row" width="480" height="65"></canvas>
 </div>
 
 <div class="controls" id="controls"></div>
@@ -60,12 +60,12 @@
 </div>
 
 <div class="legend">
-  <b>left</b> filter: framed in ENC1's 120 &times; 75 cell &mdash; passband / resonance peak / dB fall, no readout &nbsp;&middot;&nbsp;
+  <b>left</b> filter: framed in ENC1's 117 &times; 65 cell &mdash; passband / resonance peak / dB fall, no readout &nbsp;&middot;&nbsp;
   <b>gap</b> 120&ndash;239 px blank &nbsp;&middot;&nbsp;
   <b>right</b> ADSR: 240&ndash;479 px, four 60 px slots with A / D / S / R bars
 </div>
 
-<h1 style="margin-top:28px">ENCMODE4 &middot; FLAVOR = LFO &mdash; the same 480 &times; 75 row</h1>
+<h1 style="margin-top:28px">ENCMODE4 &middot; FLAVOR = LFO &mdash; the same 480 &times; 65 row</h1>
 <p class="note">
   The LFO flavor, laid out like the envelope one: the <b>same filter</b> on the left
   (driven by the cutoff / resonance sliders above), a blank band, then the still waveform
@@ -78,7 +78,7 @@
 </p>
 
 <div class="row-wrap">
-  <canvas id="lfoRow" width="480" height="75"></canvas>
+  <canvas id="lfoRow" width="480" height="65"></canvas>
 </div>
 
 <div class="controls" id="lfoControls"></div>
@@ -98,27 +98,27 @@
 /* ------------------------------------------------------------------ */
 const PANEL_W   = 480;
 const CELL_W    = PANEL_W / 4;              // 120
-const CELL_H    = 75;
-const ENV_TOP   = 8;
-const ENV_H     = 36;
-const ENV_BAR_Y = ENV_TOP + ENV_H + 4;      // 48
-const ENV_BAR_H = 6;
-const ENV_CAP_Y = ENV_BAR_Y + ENV_BAR_H + 2; // 56
+const CELL_H    = 65;
+const ENV_TOP   = 6;
+const ENV_H     = 30;
+const ENV_BAR_Y = ENV_TOP + ENV_H + 3;      // 39
+const ENV_BAR_H = 5;
+const ENV_CAP_Y = ENV_BAR_Y + ENV_BAR_H + 1; // 45
 const ENV_HALF_W = PANEL_W / 2;             // 240
 const ENV_SLOT_W = ENV_HALF_W / 4;          // 60
 const ENV_FLT_BOX_X = 2;                    // the filter's rectangle: ENC1's cell
 const ENV_FLT_BOX_Y = 2;
 const ENV_FLT_BOX_W = CELL_W - 4;           // 116
-const ENV_FLT_BOX_H = CELL_H - 4;           // 71
+const ENV_FLT_BOX_H = CELL_H - 4;           // 61
 const ENV_FLT_PAD   = 4;                    // air on the left only
 const ENV_FLT_PLOT_X = ENV_FLT_BOX_X + ENV_FLT_PAD;        // 6
 const ENV_FLT_PLOT_Y = ENV_FLT_BOX_Y + 1;                  // 3: the curve owns the frame's interior
-const ENV_FLT_PLOT_H = ENV_FLT_BOX_H - 2;                  // 69: passband still on row 37
+const ENV_FLT_PLOT_H = ENV_FLT_BOX_H - 2;                  // 59: passband still on row 32
 const ENV_FLT_CURVE_W = ENV_FLT_BOX_W - ENV_FLT_PAD - 1;   // 111: curve runs to the frame's right side
 const ENV_ENV_X   = ENV_HALF_W;             // 240
 const LFO_READ_R  = PANEL_W - 4;            // 476: the right-aligned end of the readouts
 const LFO_READ_GAP = 14;                    // air between "CAP: value" pairs
-const LFO_READ_Y  = ENV_CAP_Y;              // 56: the ADSR's caption line
+const LFO_READ_Y  = ENV_CAP_Y;              // 45: the ADSR's caption line
 
 /* COL_* are RGB565 in the firmware; these are their 8-bit equivalents */
 const COL_BG     = "#000000";  // 0x0000
@@ -229,7 +229,7 @@ function envReadout(x, y, w, cap, v) {
     ctx.fillRect(x + 1, y + ENV_BAR_Y + 1, fill, ENV_BAR_H - 2);
   }
 
-  ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, monospace";
   ctx.textBaseline = "top";
   ctx.textAlign = "left";
   ctx.fillStyle = COL_DIM;
@@ -565,7 +565,7 @@ function drawLfo() {
   // its four values on ONE line as "CAP: value", the value right behind its
   // colon, RIGHT-aligned: the last value ends 4 px from the panel edge and the
   // pairs run left from it
-  lfoCtx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+  lfoCtx.font = "12px ui-monospace, SFMono-Regular, Menlo, monospace";
   lfoCtx.textBaseline = "top";
   lfoCtx.textAlign = "left";
   const caps = LFO_CAPS.map((c) => c + ":");

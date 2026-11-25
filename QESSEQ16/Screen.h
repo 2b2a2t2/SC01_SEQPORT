@@ -13,15 +13,17 @@
 
    ScreenOled.cpp   Teensy 4.1, SSD1306 128x64 - the layout the firmware was
                     written on (header, 4x2 label/value cells, 5+4 legend)
-   ScreenPanel.cpp  SC01 Plus, ST7796 480x320 - the SC01_SEQPORT.ino layout
-                    (header band, ENC/SEQ/KEY mode row, 4x2 cells of 120x75,
-                    three legend rows of buttons - PREV/NEXT, then 3 + 4 -
-                    CC dials)
+   ScreenPanel.cpp  SC01 Plus, ST7796 480x320 - the panel layout: a header
+                    with the name and a 12 px status slot, the step lane, the
+                    4x2 card of 117x65 cells, the help row and the legend in
+                    3 + 3 + 4 columns, with CC dials
 
  The vocabulary is the OLED's - eight cells (four per row), nine legend slots
  - because that is what Display.cpp's layout logic produces on either panel.
- The 480x320 panel simply gives each cell 120x75 px to say it in, and splits
- the nine slots over three rows instead of two.
+ The 480x320 panel simply gives each cell 117x65 px to say it in, splits the
+ nine slots over three rows instead of two, and adds the two things the strip
+ has no room for: the step lane (scrStepLane) and the header's status slot
+ (scrStatus).  Both are panel-only; the strip implements them as no-ops.
 *****************************************************************************/
 
 #define SCR_CELLS    8
@@ -40,9 +42,20 @@ void scrFrameBegin();
 // (accent colour, takes the whole strip if long); otherwise the note is the
 // persistent one and the left label shares the strip with it.
 void scrHeader(const char* left, const char* right, bool transient);
-// Mode row: 0 ENC, 1 SEQ, 2 KEY.  No-op on the 128x64 panel, where the family
-// is named in the header instead.
+// Active family: 0 ENC, 1 SEQ, 2 KEY.  Neither panel draws a mode row any more
+// - the family is named in the header - but the panel keeps it, because the
+// help row falls back on it when the header carries a page name instead.
 void scrModeRow(uint8_t active);
+// SC01 only: the header's 12 px status slot, used when no temporary message is
+// up and the persistent note is empty - `TRACK 02 - STEP 08/16`.  No-op on the
+// 128x64 strip, whose header has no room beside the label.
+void scrStatus(const char* text);
+// SC01 only: the step lane under the header, one numbered square per pad of the
+// edit window.  `chan` is the channel the current mode is working on (1..16; 0
+// lights none) and fills that pad's square, `used` a bit per slot with notes,
+// `play` the pad the playhead is on (0xFF for none).  No-op on the 128x64 strip:
+// there the pads themselves are the picture.
+void scrStepLane(uint8_t chan, uint16_t used, uint8_t play);
 
 void scrCellLabel(uint8_t i, const char* text);       // caption over the value
 void scrCellLabelSmall(uint8_t i, const char* text);  // ENCABLETONMODE names

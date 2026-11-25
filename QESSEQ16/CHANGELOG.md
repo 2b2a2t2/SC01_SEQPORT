@@ -6,6 +6,143 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### SC01 panel: black lane pads, and a strip that breathes
+
+- **The step lane's squares are the page's black.** An empty square was `#080808` and a step that
+  carried notes `#212121`, which drew the strip above the header as a grey band on the black page.
+  Both fills are `#000000` now, so the row is sixteen pads on the page itself; a step with notes
+  is told apart by its cyan edge, and the lit channel square (solid cyan) and the playhead are
+  unchanged.
+- **The lane keeps 3 px of air above and below its chips** instead of 2: the band is 28 px around
+  the same 22 px squares (37–64), and every band under it moved down two pixels — the knob card
+  66–195, the help row 197–234, the legend 236–313, with 6 px of black left under it.
+
+### SC01 panel: a tighter lane, a larger status line, and no cut labels
+
+- **The step lane is a strip again.** Each of the sixteen chips is 25 × 22 instead of 25 × 26, so
+  the band is 37–62 and the knob card starts at 64; the number still sits inside its chip. The
+  row reads as a strip along the top of the page instead of a second key row above the card.
+- **The header's right slot is set in the 12 px face**, not the 10 px one: the temporary message
+  and `TRACK 02 - STEP 08/16` were the smallest type on the panel and were hard to read from
+  where the panel actually sits. The slot starts a pixel higher so it stays centred against the
+  16 px page name beside it.
+- **A turning encoder no longer cuts its label.** Repainting one dial clears the 29 px box around
+  it, which has to reach the pointer's lowest point — in the top rows of the CC caption's ink.
+  The caption is now drawn back after the dial, so `CC17` stays whole while the knob moves
+  instead of losing its top half.
+
+### SC01 panel: the pre-redesign palette is back
+
+- **White values on black, the palette the panel used before the mockup restyle.** The layout is
+  unchanged; only the colour roles move. Cell values, bars, the header's page name and the help
+  row's name are white `#FFFFFF`, the page and the knob grid are black `#000000`, cards and chips
+  are the old dark grey `#1C1C1C`, captions are a light grey `#C6C6C6`, the lane's dim numbers
+  the old `#8C8C8C`, hairlines `#292929` and chip edges `#4A4A4A`. Cyan `#00FFFF` is back to
+  meaning *live* only: the accented chip, the lit lane square, the playhead, the dial pointer,
+  the curves and the transient message. The redesign had made cyan the value colour as well,
+  which flattened the hierarchy and read harder at 16 px.
+- **An unlit lane square is almost black.** The step lane's squares were drawn in the chip grey
+  `#3C3C3C`, which made the row brighter than the page above it and competed with the one lit
+  square. An empty square is `#080808` now and one that carries notes `#212121` — still a shade
+  off the page, still edged in cyan, but the row reads as sixteen empty pads and the mode's
+  channel is again the only thing that draws the eye.
+- **The help row is black too.** Its card was the same dark grey as the knob card, which made the
+  information strip a third grey band between two black ones. It is filled in the page's black
+  with only its hairline edge kept, so the pictogram, the page's name and its one-line
+  explanation now sit directly on the page.
+- **The legend's chips are black as well**, so the bottom band matches the strip above it: an
+  unarmed chip is the page's black inside its `#4A4A4A` outline, an armed one stays solid cyan.
+  The `#1C1C1C` fill now survives only on the level bars (the dial track, the bar cell and the
+  envelope readouts), where it is a track rather than a button.
+
+### SC01 panel: the strip names the channel, and the numbers moved inside
+
+- **The step lane is sixteen numbered squares**, 25 × 26 with each pad's number drawn inside it
+  instead of under a 13 px bar — so the numbers sit where the hand already is and the band is the
+  squares plus 2 px of air above and below.
+- **The square of the channel the mode is on is lit**: `SEQMODE` lights the edited track's square,
+  `KEYMODE` the keyboard's channel, `ENCMODE` the encoder bank's CC channel (`panelStripChannel()`
+  in `Display.cpp`). Editing channel 1 lights the first square, controlling the keyboard on
+  channel 8 lights the eighth, whatever the pattern length — a silent track still shows which
+  channel its mode is on. `scrStepLane()` takes that channel in place of the old window's first
+  step; a square that carries notes is filled in grey, and the playhead is a bar inside its
+  own square.
+
+### SC01 panel: black grid, and a channel switch repaints the track
+
+- **The knob grid is black.** The big card's ground and every cell fill are `#000000` rather than
+  the card's `#0B1D28`, so the grid reads as a black working area with steel hairlines in it. The
+  page and the help card keep the palette; the card's rounded corners are filled once per full
+  repaint (`scrUpdate`'s `mainDirty` branch), which the cell repaints never reached before.
+- **Changing the edited channel now repaints the whole page.** `Display.cpp` tracks the channel
+  once per loop (`channelFollow()`) and, when it moves, clears the model and refills it for the
+  new track. Before, only the paths that refreshed by hand did anything - and even then the
+  per-cell string comparison could see no change (two tracks of the same type on the same knob
+  values) and leave the old track's grid up. Every way the focus moves is covered now: the
+  channel pads, the KEYMODE3 channel link, an undo or a paste that lands on another track, and a
+  restored session.
+
+### SC01 panel: the mockup redesign
+
+- **The panel is drawn in the reference mockup's language**: a navy page, the knob grid as one
+  rounded card with hairline dividers, chips in steel blue, cyan for anything live and a pale
+  blue-grey for text that is only read. Nothing about the content moved — the same eight cells,
+  nine legend slots and header text — it is the drawing layer that changed.
+- **Captions are 10 px over 16 px values** (was 12 px for both). That hierarchy is what gives the
+  screen its look: `OCTAVE` small over `0` big, `PROBABILITY` small over `100%` big. The three
+  faces were already embedded, so nothing new is stored.
+- **A step lane under the header** (37..66) shows the edited track's own pads: one chip per step of
+  the edit window, lit for a step that carries notes, the playhead in cyan, the step numbers under
+  them. It is the pads' picture, read from the same functions (`seqStepViewBase`, `seqStepUsed`,
+  `seqStepPlayPad`), and a step repaints two chips rather than the row. New panel-only call:
+  `scrStepLane()` (a no-op on the 128x64 strip, where the pads already are the picture).
+- **The header's right slot is a 10 px status slot**: `TRACK 02 - STEP 08/16` (or `- SILENT`),
+  with the temporary message taking the slot while it is up — so the announcement no longer needs
+  a line of its own and the name is never disturbed. `scrStatus()` feeds it from `Display.cpp`,
+  which rebuilds it only when the track, length, window or playhead changes.
+- **A help row** (199..236): a pictogram, the page's name and one line saying what the page is for —
+  `GENERATOR` / `Writes a pattern into this track`, `PROBABILITY` / `Chance the step plays`,
+  `TIE` / `Holds the step into the next one`. The line is looked up from the header's own label in
+  a table in `ScreenPanel.cpp`, so it follows whatever page the screen is on; a page the table does
+  not know gets its name only.
+- **The legend is 3 + 3 + 4** — the mockup's split: 150 px chips nine apart in the first two rows,
+  111 px eight apart in the last — and an empty slot keeps its column standing as an outline
+  instead of pulling the row left.
+- **The mode row is gone**: the family is named in the header (as it always was on the 128x64
+  strip) and the three mode pads switch it, so its 32 px went to the lane, the help row and the
+  taller chips. `scrModeRow()` is still called — the help row falls back on the family when the
+  header shows a page name instead.
+
+### SC01 panel: the temporary message has a line of its own
+
+- **The header is two lines**: the 16 px label / status line on top, and the temporary
+  announcement (2.5 s) under it on **a line of its own in the 10 px Nasalization cut**
+  (`kFontNasa10`, already embedded), starting at the panel's left edge instead of a right-aligned
+  tail that shrank to the grid size or squeezed the label when it was long. The band is 58 px
+  and the accent rule sits at its bottom.
+- **The knob rows paid for it**: a cell is 67 px instead of 75 (caption 10..22, value 29..41,
+  its wrapped second line 42..54 - still a dozen pixels of air at the bottom), and the on-screen
+  buttons are 24 px instead of 26 on 32 px mode and legend rows. Dial rings are 48 px across
+  (was 52) with the caption still in the notch, and the ENVELOPE / LFO row moved up with the
+  cell (curve 7..38, bars 43..48, readouts 51..63). The ENCMODE4 row preview follows the new
+  cell height.
+
+### SC01 panel: the grid face is 12 px
+
+- **The mode row, every cell caption and value and every legend button are drawn two pixels
+  taller**: the grid face moved from the 10 px Nasalization cut to the 12 px one
+  (`kFontNasa12`, embedded from `fonts/nasa12.bin`), and the cell's lines moved up with the
+  shorter line height (13 px - caption at 10..22, value at 29..41, its wrapped second line at
+  42..54).
+- **12 px is the largest cut the fixed furniture takes**, measured on the face: the widest
+  caption (`INPUT CHANNEL`) is 104 px inside the 108 px text box, the widest legend
+  (`PROBABILITY`) 83 px in the 104 px button, and the mode labels fit with room
+  (`SEQUENCER` is 79 px).
+  A 14 px cut would put `INPUT CHANNEL` at 122 px, so captions would lose their tails. The
+  16 px header band is untouched. `ScreenPanel.cpp`'s type comments now carry the measured
+  numbers instead of the old 8 px-per-character estimate, and the ENCMODE4 row preview draws
+  its captions at 12 px to match the panel.
+
 ### `DRIFT`: a second progression from an existing one
 
 - **New `POLY` track type `DRIFT`** (type value 6, after `SKANK`): it reads the `FOLLOW` feeder's

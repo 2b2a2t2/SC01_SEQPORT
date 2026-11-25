@@ -259,6 +259,65 @@ static void writeLegends() {
                          !pageOwns));
 }
 
+// ---------------------------------------------------------------------------
+// SC01 panel chrome: the step lane and the header's status slot.
+//
+// The lane is the pads' own picture - one numbered square per pad of the edit
+// window, the playhead marked, a square filled for a step that carries notes,
+// and the square of the channel the current mode works on lit in the accent - so
+// it reads the same numbers the pads do, from the same functions.  The mask is
+// rebuilt when the screen is (an edit, a page move, a track switch); the
+// playhead and the channel are read every loop, which is why a step costs two
+// chips rather than the whole band.
+// ---------------------------------------------------------------------------
+static uint16_t laneUsed = 0;
+
+static void panelLaneFromPattern() {
+  laneUsed = 0;
+  if (seqPatLen() <= 0) return;     // a silent track has no steps to show
+  const uint8_t base = seqStepViewBase();
+  for (uint8_t i = 0; i < 16; i++)
+    if (seqStepUsed((uint8_t)(base + i)))
+      laneUsed |= (uint16_t)(1u << i);
+}
+
+// The channel the lane lights: the one the current mode is working on - the
+// sequence being edited, the keyboard's channel, or the encoder bank's CC
+// channel.  No family latched lights nothing.
+static uint8_t panelStripChannel() {
+  if (modeBase == MODE_SEQ) return seqEditChannel();
+  if (modeBase == MODE_KEY) return keyChannel();
+  if (modeBase == MODE_ENC) return encChannel();
+  return 0;
+}
+
+// Called every loop: both panel setters compare against what is already drawn,
+// so the common case is a handful of reads and nothing on the bus.
+static void panelChrome() {
+  scrStepLane(panelStripChannel(), laneUsed, seqStepPlayPad());
+
+  static uint8_t lastCh = 0xFF, lastLen = 0xFF, lastPad = 0xFF, lastBase = 0xFF;
+  const uint8_t ch = seqEditChannel();
+  const uint8_t len = (uint8_t)seqPatLen();
+  const uint8_t pad = seqStepPlayPad();
+  const uint8_t base = seqStepViewBase();
+  if (ch == lastCh && len == lastLen && pad == lastPad && base == lastBase) return;
+  lastCh = ch;
+  lastLen = len;
+  lastPad = pad;
+  lastBase = base;
+
+  char buf[32];
+  if (len == 0)
+    snprintf(buf, sizeof(buf), "TRACK %02u - SILENT", (unsigned)ch);
+  else if (pad < 16)
+    snprintf(buf, sizeof(buf), "TRACK %02u - STEP %02u/%u", (unsigned)ch,
+             (unsigned)(base + pad + 1), (unsigned)len);
+  else
+    snprintf(buf, sizeof(buf), "TRACK %02u - %u STEPS", (unsigned)ch, (unsigned)len);
+  scrStatus(buf);
+}
+
 void refreshMainScreen() {
   // A frame, not a wipe: every scr*() below compares against what is already
   // on the panel and repaints only the cells, dials and legend slots that
@@ -1115,6 +1174,7 @@ void refreshMainScreen() {
   }
 
   writeLegends();
+  panelLaneFromPattern();   // the lane follows the pattern the cells show
 }
 
 void drawHeaderText() {
@@ -1280,7 +1340,30 @@ void displayShowBoot(bool safeMode, const char* reset, const char* stage,
   scrUpdate();
 }
 
+// A channel switch changes what every cell means - and two tracks of the same
+// type can sit on the same knob values, so the per-cell string comparison in
+// refreshMainScreen() cannot be relied on to notice the switch.  Tracking the
+// channel here, once per loop, covers every way the focus moves (the channel
+// pads, the KEYMODE3 link, an undo or a paste that lands on another track, a
+// restored session) instead of only the paths that refresh by hand.
+static uint8_t shownChannel = 0;
+
+static void channelFollow() {
+  const uint8_t ch = seqEditChannel();
+  if (shownChannel == 0) {     // first pass: initDisplay() has drawn this one
+    shownChannel = ch;
+    return;
+  }
+  if (ch == shownChannel) return;
+  shownChannel = ch;
+  scrClear();            // every region is stale: it is another track's page
+  refreshMainScreen();
+  refreshHeader();
+}
+
 void displayUpdate() {
+  channelFollow();   // another track: repaint the page, not just what differs
+  panelChrome();   // the lane's playhead and the header's status follow the step
   if (headerActive && (long)(millis() - headerDeadline) >= 0) {
     headerHide();
   }

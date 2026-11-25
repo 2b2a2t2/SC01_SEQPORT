@@ -14,32 +14,38 @@
 PanelSC01 tft;
 
 /*****************************************************************************
- SC01 Plus (480x320 ST7796) - the layout SC01_SEQPORT.ino was designed on, so
- the ported firmware uses the same screen as the bring-up sketch instead of a
- 128x64 picture scaled into the middle of the panel:
+ SC01 Plus (480x320 ST7796) - the panel layout: the content the OLED carries,
+ given the room a 480 px screen has.  The one band with no OLED counterpart is
+ the step lane; everything else is the strip's own furniture, larger:
 
    OLED 128x64                  SC01 Plus 480x320
    ------------------------------------------------------------------
-   y  0..15  header strip   ->  y   0..33   header (34 px, accent rule)
-   (no OLED counterpart)    ->  y  34..67   ENC / SEQ / KEY mode row
-   y 16..47  two knob rows  ->  y  68..217  4 columns x 2 rows, 120x75
-   y 48..63  control legend ->  y 218..319  3 rows of 34: PREV/NEXT, then 3 + 4
+   y  0..15  header strip   ->  y   0..35   header (36 px): the page's name
+                                            at 16 px, a 12 px status slot on
+                                            the right, accent rule under it
+   (no OLED counterpart)    ->  y  37..64   step lane: sixteen numbered
+                                            squares, the channel the current
+                                            mode is on lit, the playhead marked
+   y 16..47  two knob rows  ->  y  66..195  one card: 4 x 2 cells of 117x65
+   y 48..63  control legend ->  y 197..234  help row: a pictogram, the page's
+                                            name and one line about it
+                             ->  y 236..313  legend: 3 rows, 3 + 3 + 4 chips
 
- Fonts: the panel draws in Nasalization, embedded as a compact bitmap font
- (16 px for the header, 10 px for everything else - see the type block further
- down).  The OLED's own fonts are still the fallback if that load fails: font 4
- (26 px) for the header, font 2 (16 px) for the rest.  One grid size either
- way: the mode row, the whole knob grid (labels AND values, including the
- number inside a dial ring) and every legend label share a face, so a mode
- button comes out the same size as a legend button and nothing changes size
- from one cell to the next.  The measured widths are why: the widest caption is
- 13 characters and the widest legend 11 - which is where the button width comes
- from, and what pins the grid face to 10 px.
+ PAD (1 px) separates every band; the bottom 6 px stay dark.
 
- A cell reads caption over value: the caption at y+10, the value at y+32, and a
- value too wide for the 108 px column is wrapped onto a second line at y+48
- instead of being abbreviated or allowed to run into the next cell - so a scale
- name is read as "Harmonic Minor" over two lines, not as "HarmMin".
+ Fonts: the panel draws in Nasalization, embedded as a compact bitmap font.
+ Three roles and no shrinking to fit - 16 px for the header's name and every
+ cell value, 12 px for the legend chips and the help row's name, 10 px for the
+ captions, the status slot, the lane numbers, the readouts and the help line
+ (see the type block further down).  The OLED's own fonts are still the
+ fallback if that load fails: font 4 (26 px) for the header, font 2 (16 px) for
+ the rest, font 1 (8 px) for the small print.
+
+ A cell reads caption over value: the caption at 10 px on y+7, the value at
+ 16 px on y+21, and a value too wide for the 101 px column is wrapped onto a
+ second line at y+38 instead of being abbreviated or allowed to run into the
+ next cell - so a scale name is read as "Harmonic Minor" over two lines, not as
+ "HarmMin".
 
  Everything is immediate mode, as on the Teensy: the scr*() calls record what
  a cell should say and scrUpdate() draws only what changed, so a knob turn
@@ -49,30 +55,41 @@ PanelSC01 tft;
 // ---------------------------------------------------------------------------
 // Palette (RGB565) - from SC01_SEQPORT/Display.cpp
 // ---------------------------------------------------------------------------
-static const uint16_t COL_BG = 0x0000;      // page background
-static const uint16_t COL_BAND = 0x18E3;    // header + legend strips
-static const uint16_t COL_GRID = 0x2965;    // cell separators
-static const uint16_t COL_DIM = 0x8C71;     // captions, legend
-static const uint16_t COL_TEXT = 0xFFFF;    // values, header
-static const uint16_t COL_RING = 0x630C;    // dial ring
-static const uint16_t COL_ACCENT = 0x07FF;  // transient text, dial pointer
+// The pre-redesign theme, kept under the new layout: a black page, dark grey
+// cards and chips, grey hairlines, WHITE for every value and name, a light grey
+// for the captions read second, and cyan only where something is live - the
+// accented chip, the lit lane square, the playhead, the curves and the
+// transient message.  The lane sits apart from the other chips: a square's fill
+// is the page's black, so the row reads as sixteen pads on the page and not as
+// a grey band, and the one lit square is the only thing that draws the eye.
+// White-on-black is what the panel had before the mockup
+// restyle; it is the more comfortable of the two to read at 16 px.  Hex in the
+// comments is the 8-bit colour these 565 words were rounded from.
+static const uint16_t COL_BG = 0x0000;      // page:      #000000
+static const uint16_t COL_CARD = 0x18E3;    // card:      #1C1C1C
+static const uint16_t COL_GRIDBG = 0x0000;  // grid:      black
+static const uint16_t COL_GRID = 0x2965;    // hairline:  #292929
+static const uint16_t COL_EDGE = 0x4A49;    // chip edge: #4A4A4A
+static const uint16_t COL_BTN = 0x18E3;     // level-bar track: #1C1C1C
+static const uint16_t COL_DIM = 0x8C71;     // dim text:  #8C8C8C
+static const uint16_t COL_CAPTION = 0xC618; // caption:   #C6C6C6
+static const uint16_t COL_TEXT = 0xFFFF;    // value:     white
+static const uint16_t COL_RING = 0x630C;    // dial ring, unfilled
+static const uint16_t COL_ACCENT = 0x07FF;  // live:      cyan
 
 // ---------------------------------------------------------------------------
 // Type: one family, two fixed sizes, and nothing shrinks to fit.
 //
 // The panel used to mix FreeSans with the bitmap fonts and let every over-wide
 // string drop a size, which is why ACCENT and PROBABILITY - the same legend row
-// - came out in different fonts and sizes.  The measured widths decide the two
-// sizes here: at 9 pt FreeSans a capital is ~11 px, so PROBABILITY is 118 px and
-// INPUT CHANNEL 144 px, wider than the 96 px legend slot and the 120 px cell
-// they have to sit in.  The 16 px bitmap face advances ~8 px per character, so
-// the widest caption (13) is 104 px inside a 108 px box and the widest legend
-// (11) is 88 px inside its slot, with the same face and size for both.
+// - came out in different fonts and sizes.  Nothing scales any more; the size
+// is part of the role, and the boxes were sized for the face: at 10 px the
+// widest caption (INPUT CHANNEL) is 87 px inside the 101 px text box, at 12 px
+// the widest legend (PROBABILITY) is 83 px inside a 111 px chip.
 // ---------------------------------------------------------------------------
-#define FONT_BIG   4   // 26 px: the header only
-#define FONT_SMALL 2   // 16 px: the mode row, everything in the knob grid -
-                       // labels AND values - and every legend button.  One size
-                       // so a cell never changes face when its value does
+#define FONT_NOTE  1   // 8 px: the 10 px face's stand-in
+#define FONT_BIG   4   // 26 px: the 16 px face's stand-in
+#define FONT_SMALL 2   // 16 px: the 12 px face's stand-in
 
 // ---------------------------------------------------------------------------
 // Type face: Nasalization, the brand face, instead of the built-in bitmap
@@ -81,18 +98,18 @@ static const uint16_t COL_ACCENT = 0x07FF;  // transient text, dial pointer
 // The OTF cannot be drawn by this panel, so it was converted to LovyanGFX's
 // compact bitmap font (head/cmap/loca/glyf, 1 bpp) and embedded in flash by
 // fonts/nasa_fonts.h; PointerWrapper feeds the bytes to lgfx::BFFfont, so the
-// board needs no filesystem and no SD card to have its type.  Two sizes, the
-// two the layout was built around:
+// board needs no filesystem and no SD card to have its type.  Three sizes, the
+// ones the layout was built around:
 //
-//   16 px  the header band
-//   10 px  the mode row, every cell caption and value, every legend button
+//   16 px  the header's name and every cell value (useTitle)
+//   12 px  every legend chip and the help row's name (useGrid)
+//   10 px  cell captions, the header's status slot, the lane numbers, the
+//          ADSR / LFO readouts and the help line (useCaption)
 //
-// 10 px is not a preference, it is what the fixed-width furniture allows: a
-// legend button is 104 px and its widest label (PROBABILITY) measures 85 px at
-// 10 px but 102 px at 12 px, and a caption gets 108 px, where INPUT CHANNEL is
-// 98 px at 10 px but 118 px at 12 px - the 12 px cut truncates it.  Nasalization
-// is a wide face; the bitmap font it replaces advanced 8 px per character,
-// which is the assumption the measurements in the comments above were made on.
+// The caption face is the smaller one because the caption is read second: the
+// value is the number the hand is on.  A 12 px caption would also put INPUT
+// CHANNEL at 104 px, which still leaves only 8 px of air in the 117 px cell;
+// at 10 px it is 87 px and the cell breathes.
 //
 // loadFont() parses the tables into RAM once, from scrBegin().  A failed load
 // leaves the built-in faces selected, so a bad font can never blank the panel.
@@ -101,129 +118,165 @@ static const uint16_t COL_ACCENT = 0x07FF;  // transient text, dial pointer
 
 static lgfx::BFFfont nasaHeader;
 static lgfx::BFFfont nasaGrid;
+static lgfx::BFFfont nasaNote;
 static lgfx::PointerWrapper nasaHeaderSrc(kFontNasa16, sizeof(kFontNasa16));
-static lgfx::PointerWrapper nasaGridSrc(kFontNasa10, sizeof(kFontNasa10));
+static lgfx::PointerWrapper nasaGridSrc(kFontNasa12, sizeof(kFontNasa12));
+static lgfx::PointerWrapper nasaNoteSrc(kFontNasa10, sizeof(kFontNasa10));
 static bool nasaUp = false;
+static bool noteUp = false;
 
 static void scrLoadFonts() {
   if (nasaUp) return;
   const bool h = nasaHeader.loadFont(&nasaHeaderSrc);
   const bool g = nasaGrid.loadFont(&nasaGridSrc);
+  const bool n = nasaNote.loadFont(&nasaNoteSrc);
   nasaUp = h && g;
+  noteUp = n;      // the message line falls back on its own if this one fails
 }
 
-// Select the header face / the grid face, or the built-in one as a fallback.
-static void useHeader() {
+// Three faces, three jobs, each with its own fallback if the load failed:
+//   useTitle()   16 px  the header's name and every cell value
+//   useGrid()    12 px  legend chips and the help row's name
+//   useCaption() 10 px  cell captions, the header's status slot, the lane's
+//                       numbers, the ADSR / LFO readouts and the help line
+static void useTitle() {
   if (nasaUp) tft.setFont(&nasaHeader); else tft.setTextFont(FONT_BIG);
 }
 static void useGrid() {
   if (nasaUp) tft.setFont(&nasaGrid); else tft.setTextFont(FONT_SMALL);
 }
+static void useCaption() {
+  if (noteUp) tft.setFont(&nasaNote); else tft.setTextFont(FONT_NOTE);
+}
 
 // ---------------------------------------------------------------------------
-// Layout: header 0..33, mode row 34..67, knob band 68..217, legend 218..319
+// Layout: header 0..35, step lane 37..64, cells 66..195, help row 197..234,
+// legend 236..313 - one pixel of page background between the bands.
 // ---------------------------------------------------------------------------
 #define PANEL_W       480
 #define PANEL_H       320
-#define HEADER_H       34
-#define MODE_Y       HEADER_H
-#define MODE_H         34
-#define MAIN_Y       (MODE_Y + MODE_H)          // 68
-#define CELL_W       (PANEL_W / 4)              // 120
-// The legend grew a third row: PREV / NEXT get one of their own above the two
-// control rows.  Each row is a 34 px band - the mode row's own height - so all
-// four button rows on the panel are identical, and the 3 x 34 px that costs
-// the bottom is what the knob band pays: 75 px a row instead of 94, with every
-// position inside a cell derived from that.  The row split is slots 0-1 / 2-4
-// / 5-8, which is the OLED's "PREV NEXT M1 M2 M3" row minus its first two.
+#define PAD             1                       // air between the vertical bands
+// The header is ONE line: the family / page name at 16 px on the left and the
+// 10 px slot on the right.  The slot carries the temporary message while one
+// is up and the panel status (`TRACK 02 - STEP 08/16`) when none is, so the
+// announcement never disturbs the name and never needs a line of its own.
+#define HEADER_H       36
+#define HEADER_TEXT_Y   8                       // the 16 px name's ink
+#define STATUS_TEXT_Y  12                       // the 12 px slot's ink
+// The step lane is the pads' own picture: sixteen 25 x 22 squares, each with
+// its pad number drawn inside, the square of the channel the current mode works
+// on filled in the accent, a square edged for a step that carries notes and
+// the playhead marked inside its own square.  With the number inside instead of
+// under a 13 px bar, the band is the squares plus 3 px of air above and below.
+// The squares are 22 px tall: a chip, not a tile - the row is the strip along
+// the top of the page, and the knob card under it is the page itself.
+#define LANE_Y        (HEADER_H + PAD)          // 37
+#define LANE_H         28
+#define LANE_BAR_Y    (LANE_Y + 3)              // 40
+#define LANE_BAR_H     22                      // a square: the number fits inside
+#define LANE_SLOTS     16
+#define LANE_W         25                      // 16 x (25 + 4) = 460, 10..469
+#define LANE_GAP        4
+#define LANE_X0        10
+// The knob grid is ONE rounded card with hairline dividers inside it: four
+// columns of 117 px and two rows of 65, inset 6 px from the panel's edges.
+#define GRID_X          6
+#define GRID_Y        (LANE_Y + LANE_H + PAD)   // 66
+#define GRID_W        468
+#define GRID_R          6
+#define CELL_W        (GRID_W / 4)              // 117
+#define CELL_H         65
+#define MAIN_Y        GRID_Y
+#define PAD_X           8                       // cell left inset
+#define TEXT_W        (CELL_W - PAD_X * 2)      // 101
+// A cell reads caption over value: the 10 px caption at +7, the 16 px value at
+// +21 and its wrapped second line at +38 - all inside the 65 px cell.
+#define CAP_H          11                       // one line of the 10 px face
+#define LABEL_Y         7
+#define VALUE_Y        21
+#define VAL_H          17                       // one line of the 16 px face
+
+// The help row: a card with a pictogram, the page's name and one line saying
+// what that page is for.
+#define INFO_Y        (GRID_Y + CELL_H * 2 + PAD)     // 197
+#define INFO_H         38
+
+#define LEGEND_Y      (INFO_Y + INFO_H + PAD)         // 236
 #define LEGEND_ROWS     3
-#define LEGEND_SLOT_H   34                        // = MODE_H: one per legend row
-#define LEGEND_Y      (PANEL_H - LEGEND_SLOT_H * LEGEND_ROWS)  // 218
-#define CELL_H        ((LEGEND_Y - MAIN_Y) / 2)   // 75
-// The legend rows are a fixed button grid (see the BTN_ constants): the same
-// four columns every row starts from at the left, so the strip lines up with
-// the cell captions above it instead of re-flowing with the text.
-#define PAD_X           6                       // cell left inset
-#define TEXT_W       (CELL_W - PAD_X * 2)       // 108: 13 characters at 16 px
-#define TEXT_H          16                      // one line of FONT_SMALL
-// A cell reads caption over value.  The caption sits near the top so the value
-// has the room for a second line under it: 10..25 for the caption, 32..47 for
-// the value, 48..63 for its wrapped continuation - all inside the 75 px cell,
-// with a hand's width of air left at the bottom.
-#define LABEL_Y        10                       // caption top inside a cell
-#define VALUE_Y        (LABEL_Y + TEXT_H + 6)   // value top: 6 px under it
+#define LEGEND_SLOT_H  26
 
-// One button for the mode row and the legend alike: the same width, the same
-// 16 px face, the same 26 px height, the same radius - and the same columns.
-// The width is the widest legend there is (PROBABILITY: 11 characters at the
-// 8 px advance of FONT_SMALL = 88, plus this padding), so every row is a fixed
-// grid that starts at the cell captions' left edge and never re-flows when a
-// label changes or a slot goes empty.
-#define BTN_H          26                       // 4 px above and below in a 34
-#define BTN_R           6
-#define BTN_PAD_X       8                       // room each side of the longest
-                                                 // label; it is what sets BTN_W
-#define BTN_W         (11 * 8 + BTN_PAD_X * 2)  // 104: the widest legend
-#define BTN_GAP        16                       // between two buttons
-#define BTN_X0         PAD_X                    // 6: same edge as a cell caption
+// The legend is 3 + 3 + 4 columns, the mockup's split: the first two rows are
+// wider (150 px, 9 apart = 468) because PREV / NEXT and the three menus read
+// as one group, the last row is four (111 px, 8 apart = 468) because the
+// attributes are short words.  Every chip is 24 px tall in its 26 px row, 5 px
+// radius, and an empty slot keeps its column standing as an outline.
+#define BTN_H          24
+#define BTN_R           5
+#define LEG_WIDE_W    150
+#define LEG_WIDE_GAP    9
+#define LEG_NARROW_W  111        // row 2
+#define LEG_NARROW_GAP  8
+#define LEG_X0          6
 
-// Dial geometry inside a cell (ring outer radius 26, caption in the notch).// The cell is 75 tall: centred at 33 the 32 px repaint box starts one pixel
-// below the cell's top edge (so it never eats the grid line) and its bottom
-// edge at 56 clears the caption's 16 px box at 57..72, which in turn ends two
-// pixels short of the cell's own bottom edge at 74.
-#define DIAL_CY         33
-#define DIAL_R          26
-#define DIAL_CAPTION_Y  65
+// Dial geometry inside a cell (ring outer radius 24, caption in the notch).
+// The cell is 65 tall: centred at 30 the 29 px repaint box starts one pixel
+// below the cell's top edge (so it never eats the grid line); its lower edge
+// runs to 52 because the pointer's lowest reach is 50, which lands in the top
+// of the 10 px caption's ink - drawDialOnly() redraws the caption afterwards
+// rather than leave the label cut.
+#define DIAL_CY         30
+#define DIAL_R          24
+#define DIAL_CAPTION_Y  52
 // Region repainted when only a dial's value changed: ring, pointer at its
 // farthest (R+4 plus the 2 px stroke) and the value text. From the cell centre
-// that is 32 px sideways/up and 23 px down, so it stops short of the cell's
+// that is 29 px sideways/up and 22 px down, so it stops short of the cell's
 // left edge, its top edge and the caption: the grid lines and the label are
 // never erased by an encoder step.
-#define DIAL_CLR        (DIAL_R + 6)    // 32
-#define DIAL_CLR_DOWN   (DIAL_R - 3)    // 23
+#define DIAL_CLR_DOWN   22              // the pointer's lowest end is 20
+#define DIAL_CLR        (DIAL_R + 5)    // 29: the ring and the pointer's reach
 
-// Bar cell (FLAVOR = BARS): a 108 px track across the cell with the level in
+// Bar cell (FLAVOR = BARS): a 101 px track across the cell with the level in
 // it, the CC number above and the number itself under the track.
-#define BAR_Y          36
-#define BAR_H          18
-#define BAR_NUM_Y      62
+#define BAR_Y          24
+#define BAR_H          16
+#define BAR_NUM_Y      50
 // Envelope row (FLAVOR = ENVELOPE): the curve takes the top of the cell, then a
-// 6 px bar and the CC caption + number under it, all inside the 75 px row.
+// 6 px bar and the CC caption + number under it, all inside the 67 px row.
 //
 // The row is split in two: the FILTER in ENC1's cell on the left, the ADSR of
 // ENC5..8 on the right.  The curve used to span the whole 480 px, which made
 // the four values unreadable off the shape; at half the width the envelope
 // reads at a glance and ENC1's cell gains the filter the cutoff / resonance
 // knobs are driving.
-#define ENV_TOP         8
-#define ENV_H          36
-#define ENV_BAR_Y     (ENV_TOP + ENV_H + 4)     // 48
-#define ENV_BAR_H       6
-#define ENV_CAP_Y     (ENV_BAR_Y + ENV_BAR_H + 2)  // 56
+#define ENV_TOP         6
+#define ENV_H          30
+#define ENV_BAR_Y     (ENV_TOP + ENV_H + 3)     // 39
+#define ENV_BAR_H       5
+#define ENV_CAP_Y     (ENV_BAR_Y + ENV_BAR_H + 1)  // 45
 #define ENV_HALF_W    (PANEL_W / 2)             // 240: filter | envelope
 #define ENV_SLOT_W    (ENV_HALF_W / 4)          // 60: one ADSR value's column
 // The filter graph fills ENC1's cell: a rectangle the size of the container
-// (120 x 75, inset two pixels) with the curve drawn inside it, so the graph
+// (117 x 65, inset two pixels) with the curve drawn inside it, so the graph
 // reads as its own instrument panel instead of a curve floating in the row.
 // It is the shape its two dials are about, so it gets the whole cell and the
-// taller plot that comes with it - nearly twice the ADSR's 36 px band.
+// taller plot that comes with it - nearly twice the ADSR's 30 px band.
 #define ENV_FLT_BOX_X   2                       // inset from the cell's edges
 #define ENV_FLT_BOX_Y   2
-#define ENV_FLT_BOX_W  (CELL_W - 4)             // 116
-#define ENV_FLT_BOX_H  (CELL_H - 4)             // 71
+#define ENV_FLT_BOX_W  (CELL_W - 4)             // 113
+#define ENV_FLT_BOX_H  (CELL_H - 4)             // 61
 #define ENV_FLT_PAD     4          // air on the left only: the passband starts clear
 #define ENV_FLT_PLOT_X (ENV_FLT_BOX_X + ENV_FLT_PAD)      // 6
 // Vertically the curve uses the frame's whole interior, because a maxed
 // resonance has to touch the frame's top side and the fall to reach the floor
 // with no gutter under it.  The passband still lands on the frame's middle row
-// (37): 3..71 is symmetric about it, like the frame's own 2..72.
+// (32): 3..61 is symmetric about it, like the frame's own 2..62.
 #define ENV_FLT_PLOT_Y (ENV_FLT_BOX_Y + 1)                // 3
-#define ENV_FLT_PLOT_H (ENV_FLT_BOX_H - 2)                // 69
+#define ENV_FLT_PLOT_H (ENV_FLT_BOX_H - 2)                // 59
 // The curve's own x span: it starts in the frame's left air but runs all the
 // way to the frame's right side.  A maxed cutoff has to END on that right edge,
 // so the axis cannot stop at the inset plot's edge and leave a 4 px gap under
 // the fall - the wall would hang in the middle of the rectangle.
-#define ENV_FLT_CURVE_W (ENV_FLT_BOX_W - ENV_FLT_PAD - 1)  // 111: x 6..116
+#define ENV_FLT_CURVE_W (ENV_FLT_BOX_W - ENV_FLT_PAD - 1)  // 108: x 6..113
 // The filter curve, in dB (see filterLevel).  The passband is 0 dB, the peak
 // sits FLT_DB_PEAK above it, and the window ends FLT_DB_BOT below it.
 //
@@ -240,7 +293,7 @@ static void useGrid() {
 // The response is a 4-pole low-pass - 24 dB/oct, the slope the module's name is
 // about - and the order is fixed, because the slope is a property of the filter
 // and not of the knob.  Only where the knee sits changes with the cutoff.  At
-// this width the fall is 0.40 decades, fifteen of the curve's 111 columns: that
+// this width the fall is 0.40 decades, fifteen of the curve's 108 columns: that
 // is what gives the knee its tight bend and the descent its wall-like look
 // without the fall turning into a vertical line.  Two poles spread it over
 // twenty-nine columns and read as a hill; sixteen drew it in five and read as
@@ -264,9 +317,9 @@ static void useGrid() {
 // left from there, so the four readouts sit under the half they describe
 // instead of starting under ENC2's column and drifting inwards whenever a value
 // changed width.  The line sits at ENV_CAP_Y, below the filter's corner.
-#define LFO_READ_R    (PANEL_W - 4)                     // 476: right-aligned end
+#define LFO_READ_R    (PANEL_W - 8)                     // 472: right-aligned end
 #define LFO_READ_GAP  14                                // air between pairs
-#define LFO_READ_Y    ENV_CAP_Y                         // 56: the ADSR's line
+#define LFO_READ_Y    ENV_CAP_Y                         // 45: the ADSR's line
 
 // ---------------------------------------------------------------------------
 // State
@@ -292,12 +345,27 @@ static bool legendSel[SCR_LEGENDS];   // the armed F1..F4 radio / open M menu
 static char headerLeft[24] = "";
 static char headerRight[40] = "";
 static bool headerTransient = false;
+// The header's right slot when nothing is being announced: the panel status
+// (scrStatus), `TRACK 02 - STEP 08/16`.  It has its own repaint box, because it
+// changes on every step while the name above it does not.
+static char statusText[32] = "";
 
+// The names the help row falls back on when the header has no page name.
 static char modeLabel[3][10] = { "ENCODER", "SEQUENCER", "KEYBOARD" };
 static uint8_t activeMode = SCR_MODE_NONE;
 
+// The step lane, from scrStepLane: the channel the current mode works on (0 =
+// none lit), one bit per slot for a step that carries notes, and the pad the
+// playhead is on (0xFF = none).
+static uint8_t laneChan = 0;
+static uint16_t laneUsed = 0;
+static uint8_t lanePlay = 0xFF;
+static uint8_t lanePlayDrawn = 0xFF;
+
 static bool headerDirty = true;
-static bool modeDirty = true;
+static bool statusDirty = true;
+static bool laneDirty = true;
+static bool helpDirty = true;
 static bool mainDirty = true;
 // One flag per cell and per legend slot: a single band-wide flag repainted all
 // eight cells on every value write, which on a panel with no framebuffer reads
@@ -333,7 +401,7 @@ static void copyText(char* dst, size_t cap, const char* src) {
 // ---------------------------------------------------------------------------
 // Full names
 // The label vocabulary comes from the 128x64 firmware, where a caption had
-// 32 px and had to be an abbreviation.  A cell here is 120x75, so the panel
+// 32 px and had to be an abbreviation.  A cell here is 117x65, so the panel
 // spells the tokens out instead of sharing the short spelling - Bindings.cpp
 // and Display.cpp keep the tables the OLED needs, and this table is applied
 // where the caption, the value or a legend label is drawn.  Only real words
@@ -459,22 +527,22 @@ static const char* fullName(const char* s) {
   return s;
 }
 
-// One text run at the grid's single size.  Labels and values share it: a long
-// value used to drop from the 26 px face to the 16 px one while its neighbours
-// kept theirs, so a cell changed font as a knob turned.  Nothing shrinks to fit
-// here either - a run wider than the cell is cut at its last space and carried
-// onto the next 16 px line, up to maxLines of them, which is what lets a value
-// be read as "Harmonic Minor" over two lines instead of "HarmMin" on one.  A
-// word longer than the cell is broken where it runs out, and anything past the
-// last line is dropped rather than drawn over the cell's edge.
+// One text run in one of the cell's two faces: `big` picks the value's 16 px
+// cut over the caption's 10 px one.  Nothing shrinks to fit - a run wider than
+// the cell is cut at its last space and carried onto the next line of the same
+// face, up to maxLines of them, which is what lets a value read as "Harmonic
+// Minor" over two lines instead of "HarmMin" on one.  A word longer than the
+// cell is broken where it runs out, and anything past the last line is dropped
+// rather than drawn over the cell's edge.
 static void drawText(const char* s, int x, int y, uint8_t maxLines,
-                     uint16_t color, uint16_t bg) {
+                     uint16_t color, uint16_t bg, bool big) {
   if (!s || !s[0]) return;
   tft.setTextDatum(lgfx::textdatum_t::top_left);
-  useGrid();
+  if (big) useTitle(); else useCaption();
+  const int lh = big ? VAL_H : CAP_H;
   tft.setTextColor(color, bg);
 
-  char line[32];        // one drawn line: TEXT_W holds 13 characters at 8 px
+  char line[32];        // one drawn line: TEXT_W holds a 14-char caption
   char one[2] = {0, 0};
   int n = 0;            // characters in the line being built
   int w = 0;            // ...and its width in pixels
@@ -485,7 +553,7 @@ static void drawText(const char* s, int x, int y, uint8_t maxLines,
   for (;;) {
     const char c = *p;
     if (c == '\0') {                       // the tail fits: draw it and stop
-      if (n) { line[n] = '\0'; tft.drawString(line, x, y + row * TEXT_H); }
+      if (n) { line[n] = '\0'; tft.drawString(line, x, y + row * lh); }
       return;
     }
     if (c == ' ' && n == 0) { p++; continue; }  // never open a line on a space
@@ -505,7 +573,7 @@ static void drawText(const char* s, int x, int y, uint8_t maxLines,
     // on with what is left of it, and of the text, one line below.
     const int cut = (brk >= 0) ? brk : n;
     line[cut] = '\0';
-    tft.drawString(line, x, y + row * TEXT_H);
+    tft.drawString(line, x, y + row * lh);
     if (row + 1 >= maxLines) return;       // no line under this one: stop here
     row++;
     if (brk >= 0) {                        // keep the part after the space
@@ -558,71 +626,236 @@ static void drawDial(int cellX, int cellY, uint8_t val) {
   tft.drawLine(xi + px, yi + py, xo + px, yo + py, COL_ACCENT);
   tft.endWrite();
 
+  // the number inside the ring is a VALUE: the 16 px face, in the live colour
   char v[4];
   snprintf(v, sizeof(v), "%u", (unsigned)val);
   tft.setTextDatum(lgfx::textdatum_t::middle_center);
-  useGrid();  // the grid's one size: the caption's own face
-  tft.setTextColor(COL_TEXT, COL_BG);
+  useTitle();
+  tft.setTextColor(COL_TEXT, COL_GRIDBG);
   tft.drawString(v, cx, cy);
 }
 
 // ---------------------------------------------------------------------------
 // Bands
 // ---------------------------------------------------------------------------
+// The status slot's own box: it starts well right of the longest page name
+// (`CHANNEL SELECT` is 150 px at 16 px) so a per-step redraw never touches it.
+#define STATUS_X0     240
+
+static void drawStatus() {
+  tft.fillRect(STATUS_X0, STATUS_TEXT_Y - 5, PANEL_W - STATUS_X0, 20, COL_BG);
+  const char* r = headerRight[0] ? headerRight : statusText;
+  if (!r[0]) return;
+  tft.setTextDatum(lgfx::textdatum_t::top_right);
+  useGrid();          // 12 px: the 10 px face was too small to read at a glance
+  tft.setTextColor((headerRight[0] && headerTransient) ? COL_ACCENT : COL_CAPTION,
+                   COL_BG);
+  tft.drawString(r, PANEL_W - 12, STATUS_TEXT_Y);
+}
+
+// The header: the page's name at 16 px in the accent, the accent rule under it,
+// and the 10 px slot on the right.  The slot carries the temporary message
+// while one is up - so the announcement never disturbs the name and never needs
+// a line of its own - and the panel status when none is.
 static void drawHeader() {
-  tft.fillRect(0, 0, PANEL_W, HEADER_H - 2, COL_BAND);
-  tft.fillRect(0, HEADER_H - 2, PANEL_W, 2, COL_ACCENT);
+  tft.fillRect(0, 0, PANEL_W, HEADER_H, COL_BG);
+  tft.fillRect(0, HEADER_H - 2, PANEL_W, 1, COL_ACCENT);
+
+  if (headerLeft[0]) {
+    tft.setTextDatum(lgfx::textdatum_t::top_left);
+    useTitle();
+    tft.setTextColor(COL_TEXT, COL_BG);
+    tft.drawString(headerLeft, 12, HEADER_TEXT_Y);
+  }
+  drawStatus();
+  useGrid();          // back to the default face for later draws
+}
+
+// One square of the step lane, its pad number drawn inside it.  A square's fill
+// is the page's black, so the row stays quiet and reads as sixteen pads rather
+// than a grey band; a square that carries notes keeps the accent edge it has
+// always had, the square of the channel the mode is on is the accent (with the
+// number in the page's black so it stays readable on it), and the playhead is a
+// bar inside its square - black on the accent, cyan everywhere else, so it
+// reads on any fill.
+static void drawLaneChip(uint8_t k) {
+  const int x = LANE_X0 + k * (LANE_W + LANE_GAP);
+  const bool on = (laneChan == (uint8_t)(k + 1));
+  const bool used = ((laneUsed >> k) & 1) != 0;
+  const bool play = (lanePlay == k);
+  const uint16_t fill = on ? COL_ACCENT : COL_BG;
+  const uint16_t edge = on ? COL_ACCENT : (used ? COL_ACCENT : COL_EDGE);
+  tft.fillRoundRect(x, LANE_BAR_Y, LANE_W, LANE_BAR_H, 3, fill);
+  tft.drawRoundRect(x, LANE_BAR_Y, LANE_W, LANE_BAR_H, 3, edge);
+
+  char n[4];
+  snprintf(n, sizeof(n), "%u", (unsigned)(k + 1));
+  tft.setTextDatum(lgfx::textdatum_t::middle_center);
+  useCaption();
+  tft.setTextColor(on ? COL_GRIDBG : COL_DIM, fill);
+  tft.drawString(n, x + LANE_W / 2, LANE_BAR_Y + LANE_BAR_H / 2);
+
+  if (play)
+    tft.fillRect(x + 3, LANE_BAR_Y + LANE_BAR_H - 4, LANE_W - 6, 2,
+                 on ? COL_GRIDBG : COL_ACCENT);
+}
+
+static void drawStepLane() {
+  tft.fillRect(0, LANE_Y, PANEL_W, LANE_H, COL_BG);
+  for (uint8_t k = 0; k < LANE_SLOTS; k++) drawLaneChip(k);
+  lanePlayDrawn = lanePlay;
+}
+
+// The playhead moved and nothing else did: two chips carry the change, not the
+// sixteen (a step would otherwise repaint the whole lane, every step).
+static void drawLanePlay() {
+  if (lanePlayDrawn < LANE_SLOTS) drawLaneChip(lanePlayDrawn);
+  if (lanePlay < LANE_SLOTS) drawLaneChip(lanePlay);
+  lanePlayDrawn = lanePlay;
+}
+
+// ---------------------------------------------------------------------------
+// Help row: a pictogram, the page's name and one line saying what it is for.
+//
+// The line is looked up in the table below from the header's own left label, so
+// the row follows the page the rest of the screen is already on; a page the
+// table does not know simply gets no line.  These are the panel's words, the
+// same way the caption table above is: the 128x64 strip has no room for them.
+// ---------------------------------------------------------------------------
+enum HelpIcon : uint8_t { HICON_NONE = 0, HICON_PULSE, HICON_STEP, HICON_KNOB,
+                          HICON_KEY, HICON_SPARK };
+struct HelpLine { const char* match; const char* line; uint8_t icon; };
+static const HelpLine kHelp[] = {
+  // pages that own the header's left slot
+  { "DRUM PATTERN", "Kit and pattern of the drum track", HICON_STEP },
+  { "CHANNEL SELECT", "Pick the MIDI channel to edit", HICON_KEY },
+  { "STEP FX",   "Poly effects on this step",        HICON_SPARK },
+  { "STEP TYPE", "Which voice plays the step",       HICON_SPARK },
+  { "EMBED",     "A chord inside the step",          HICON_STEP },
+  { "RATCHET",   "Repeats the step inside itself",   HICON_PULSE },
+  { "PROBABILITY", "Chance the step plays",          HICON_STEP },
+  { "TIE",       "Holds the step into the next one", HICON_PULSE },
+  { "GLIDE",     "Slides into the next step's pitch", HICON_PULSE },
+  { "ACCENT",    "Extra velocity on this step",      HICON_SPARK },
+  { "GENERATOR", "Writes a pattern into this track", HICON_SPARK },
+  { "STRUM ADDS", "Extra notes on a strum",          HICON_KEY },
+  { "FLAVOR",    "The second row's drawing",         HICON_KNOB },
+  { "CC CONFIG", "What each knob sends",             HICON_KNOB },
+  { "ARP",       "Arpeggiator order and options",    HICON_SPARK },
+  { "ERASE",     "Hold to clear this track",         HICON_NONE },
+  // the three families, which is what the header says the rest of the time
+  { "ENCODER",   "Knobs send CCs, F picks the bank", HICON_KNOB },
+  { "SEQUENCER", "Steps, page and track config",     HICON_STEP },
+  { "KEYBOARD",  "Play, chord or genre page",        HICON_KEY },
+};
+
+static const HelpLine* helpFor(const char* label) {
+  if (!label || !label[0]) return NULL;
+  for (uint8_t i = 0; i < sizeof(kHelp) / sizeof(kHelp[0]); i++)
+    if (strstr(label, kHelp[i].match)) return &kHelp[i];
+  return NULL;
+}
+
+// The pictograms, drawn on an 80 x 22 box at (GRID_X + 16, INFO_Y + 8).
+static void drawHelpIcon(uint8_t icon) {
+  const int x0 = GRID_X + 16;          // 22
+  const int y0 = INFO_Y + 8;           // 207
+  const int cy = y0 + 10;
+  tft.startWrite();
+  switch (icon) {
+    case HICON_PULSE: {                // two held notes and the air between
+      const int top = y0 + 2, bot = y0 + 19;
+      tft.drawLine(x0, bot, x0 + 6, bot, COL_ACCENT);
+      tft.drawLine(x0 + 6, bot, x0 + 6, top, COL_ACCENT);
+      tft.drawLine(x0 + 6, top, x0 + 20, top, COL_ACCENT);
+      tft.drawLine(x0 + 20, top, x0 + 20, bot, COL_ACCENT);
+      tft.drawLine(x0 + 20, bot, x0 + 28, bot, COL_ACCENT);
+      tft.drawLine(x0 + 28, bot, x0 + 28, top, COL_ACCENT);
+      tft.drawLine(x0 + 28, top, x0 + 42, top, COL_ACCENT);
+      tft.drawLine(x0 + 42, top, x0 + 42, bot, COL_ACCENT);
+      tft.drawLine(x0 + 42, bot, x0 + 50, bot, COL_ACCENT);
+      tft.drawLine(x0 + 50, bot, x0 + 50, cy, COL_ACCENT);
+      tft.drawLine(x0 + 50, cy, x0 + 72, cy, COL_ACCENT);
+      break;
+    }
+    case HICON_STEP:                   // four chips, the third one lit
+      for (uint8_t k = 0; k < 4; k++) {
+        const int x = x0 + k * 18;
+        if (k == 2) tft.fillRoundRect(x, y0 + 3, 14, 14, 3, COL_ACCENT);
+        tft.drawRoundRect(x, y0 + 3, 14, 14, 3, k == 2 ? COL_ACCENT : COL_EDGE);
+      }
+      break;
+    case HICON_KNOB:                   // a ring with its pointer
+      tft.drawCircle(x0 + 34, cy, 10, COL_ACCENT);
+      tft.drawLine(x0 + 34, cy, x0 + 41, y0 + 3, COL_ACCENT);
+      break;
+    case HICON_KEY:                    // three white keys, two black
+      tft.drawRect(x0, y0 + 2, 42, 17, COL_ACCENT);
+      tft.drawFastVLine(x0 + 14, y0 + 2, 17, COL_ACCENT);
+      tft.drawFastVLine(x0 + 28, y0 + 2, 17, COL_ACCENT);
+      tft.fillRect(x0 + 10, y0 + 2, 7, 9, COL_ACCENT);
+      tft.fillRect(x0 + 24, y0 + 2, 7, 9, COL_ACCENT);
+      break;
+    case HICON_SPARK: {                // an eight-point spark
+      tft.drawLine(x0 + 24, cy, x0 + 44, cy, COL_ACCENT);
+      tft.drawLine(x0 + 34, cy - 10, x0 + 34, cy + 10, COL_ACCENT);
+      tft.drawLine(x0 + 28, cy - 6, x0 + 40, cy + 6, COL_ACCENT);
+      tft.drawLine(x0 + 28, cy + 6, x0 + 40, cy - 6, COL_ACCENT);
+      break;
+    }
+    default: break;
+  }
+  tft.endWrite();
+}
+
+static void drawHelp() {
+  const char* name = headerLeft[0] ? headerLeft
+                                   : modeLabel[activeMode < 3 ? activeMode : 0];
+  const HelpLine* h = helpFor(name);
+
+  tft.fillRect(0, INFO_Y, PANEL_W, INFO_H, COL_BG);
+  tft.fillRoundRect(GRID_X, INFO_Y, GRID_W, INFO_H, GRID_R, COL_BG);
+  tft.drawRoundRect(GRID_X, INFO_Y, GRID_W, INFO_H, GRID_R, COL_GRID);
+
+  drawHelpIcon(h ? h->icon : HICON_NONE);
+  tft.drawFastVLine(GRID_X + 102, INFO_Y + 6, INFO_H - 12, COL_GRID);
 
   tft.setTextDatum(lgfx::textdatum_t::top_left);
-  useHeader();
-  int leftW = 0;
-  if (headerLeft[0]) {
-    tft.setTextColor(COL_TEXT, COL_BAND);
-    tft.drawString(headerLeft, 12, 4);
-    leftW = tft.textWidth(headerLeft);
-  }
-
-  const char* right = headerRight;
-  if (!right[0]) return;
-
-  // A temporary message owns the right side; a long one takes the whole strip
-  // and the left label is then not drawn underneath it.
-  int avail = PANEL_W - 24 - (leftW ? leftW + 16 : 0);
-  useHeader();
-  int noteY = 4;
-  if (tft.textWidth(right) > avail) {
-    useGrid();
-    noteY = 9;  // the caption size sits a little lower in the band
-  }
-  tft.setTextColor(headerTransient ? COL_ACCENT : COL_DIM, COL_BAND);
-  tft.setTextDatum(lgfx::textdatum_t::top_right);
-  tft.drawString(right, PANEL_W - 12, noteY);
-}
-
-// Mode row: three always-visible mode buttons, the active one filled.  The
-// chip is the legend's - same width, same 16 px face, same 26 px height, same
-// columns - so the row reads as buttons and not as a band of its own, and the
-// three sit on the same left-aligned grid as the rows under the knob band.
-static void drawModes() {
-  tft.fillRect(0, MODE_Y, PANEL_W, MODE_H, COL_BG);
-  tft.drawFastHLine(0, MODE_Y + MODE_H - 1, PANEL_W, COL_GRID);
-
-  const int by = MODE_Y + (MODE_H - BTN_H) / 2;  // 4 px above and below
-  tft.setTextDatum(lgfx::textdatum_t::middle_center);
   useGrid();
-  for (uint8_t i = 0; i < 3; i++) {
-    const int bx = BTN_X0 + i * (BTN_W + BTN_GAP);  // 6 / 126 / 246
-    const bool on = (i == activeMode);
-    tft.fillRoundRect(bx, by, BTN_W, BTN_H, BTN_R, on ? COL_ACCENT : COL_BAND);
-    tft.setTextColor(on ? COL_BG : COL_DIM, on ? COL_ACCENT : COL_BAND);
-    tft.drawString(modeLabel[i], bx + BTN_W / 2, by + BTN_H / 2);
+  tft.setTextColor(COL_TEXT, COL_BG);
+  tft.drawString(name, GRID_X + 112, INFO_Y + 4);
+  if (h && h->line[0]) {
+    useCaption();
+    tft.setTextColor(COL_CAPTION, COL_BG);
+    tft.drawString(h->line, GRID_X + 112, INFO_Y + 21);
   }
-  tft.setTextColor(COL_DIM, COL_BG);  // back to the default for later draws
-  useGrid();        // the panel's default size
+  useGrid();
 }
 
-static int cellX(uint8_t i) { return (i & 3) * CELL_W; }
-static int cellY(uint8_t i) { return MAIN_Y + (i >> 2) * CELL_H; }
+static int cellX(uint8_t i) { return GRID_X + (i & 3) * CELL_W; }
+static int cellY(uint8_t i) { return GRID_Y + (i >> 2) * CELL_H; }
+
+// A row keeps its vertical dividers unless it is one of the curve flavours,
+// whose picture spans two cells (a divider would cut the ADSR or the LFO).
+static bool rowPlain(uint8_t row) {
+  const uint8_t i = (uint8_t)(row * 4);
+  return cells[i].mode != CELL_ENV && cells[i].mode != CELL_LFO;
+}
+
+// The card's outline and the hairlines inside it.  Every cell repaint redraws
+// the whole frame rather than its own two edges: the fill covers the outline
+// wherever the cell touches it, and one 1 px outline is a few hundred pixels
+// of SPI - cheaper than tracking which corner a cell owns.
+static void drawGridFrame() {
+  for (uint8_t c = 1; c < 4; c++) {
+    if (rowPlain(0))
+      tft.drawFastVLine(GRID_X + c * CELL_W, GRID_Y + 1, CELL_H - 1, COL_GRID);
+    if (rowPlain(1))
+      tft.drawFastVLine(GRID_X + c * CELL_W, GRID_Y + CELL_H, CELL_H - 1, COL_GRID);
+  }
+  tft.drawFastHLine(GRID_X + 1, GRID_Y + CELL_H, GRID_W - 2, COL_GRID);
+  tft.drawRoundRect(GRID_X, GRID_Y, GRID_W, CELL_H * 2, GRID_R, COL_GRID);
+}
 
 // The two CC-row flavors (see drawBarCell / drawEnvSlice below): drawCell
 // dispatches to them, so they need to be declared before it.
@@ -630,20 +863,19 @@ static void drawBarCell(uint8_t i);
 static void drawEnvSlice(uint8_t i);
 static void drawLfoSlice(uint8_t i);
 
-// Repaint one knob cell and nothing else. The fill covers the separators that
-// run along this cell's left and top edges, so those two get drawn back.
+// Repaint one knob cell and nothing else.  The fill is the card's own colour
+// and the frame is drawn back over it, so the cell reads as a compartment of
+// the one card instead of a tile of its own.
 static void drawCell(uint8_t i) {
   const int x = cellX(i);
   const int y = cellY(i);
-  const uint8_t col = i & 3;
-  const uint8_t row = i >> 2;
 
-  tft.fillRect(x, y, CELL_W, CELL_H, COL_BG);
+  tft.fillRect(x, y, CELL_W, CELL_H, COL_GRIDBG);
   if (cells[i].mode == CELL_DIAL) {
     drawDial(x, y, cells[i].dialValue);
     tft.setTextDatum(lgfx::textdatum_t::middle_center);
-    useGrid();
-    tft.setTextColor(COL_DIM, COL_BG);
+    useCaption();
+    tft.setTextColor(COL_CAPTION, COL_GRIDBG);
     tft.drawString(cells[i].label, x + CELL_W / 2, y + DIAL_CAPTION_Y);
   } else if (cells[i].mode == CELL_BAR) {
     drawBarCell(i);
@@ -652,36 +884,32 @@ static void drawCell(uint8_t i) {
   } else if (cells[i].mode == CELL_LFO) {
     drawLfoSlice(i);
   } else {
-    drawText(cells[i].label, x + PAD_X, y + LABEL_Y, 1, COL_DIM, COL_BG);
-    drawText(cells[i].value, x + PAD_X, y + VALUE_Y, 2, COL_TEXT, COL_BG);
+    drawText(cells[i].label, x + PAD_X, y + LABEL_Y, 1, COL_CAPTION, COL_GRIDBG, false);
+    drawText(cells[i].value, x + PAD_X, y + VALUE_Y, 2, COL_TEXT, COL_GRIDBG, true);
   }
-  // The envelope and the LFO are one line across the four cells of their row,
-  // so those rows keep their vertical dividers off (they would cut the curve).
-  // Everything else draws its own left and top edges back over the fill.
-  if (col > 0 && cells[i].mode != CELL_ENV && cells[i].mode != CELL_LFO)
-    tft.drawFastVLine(x, y + 8, CELL_H - 16, COL_GRID);
-  if (row > 0) tft.drawFastHLine(x, y, CELL_W, COL_GRID);
+  drawGridFrame();
 }
 
-// One bar cell: the CC number above, a 108 px track filled to the value, and
+// One bar cell: the CC number above, a 101 px track filled to the value, and
 // the number itself under the track (FLAVOR = BARS).
 static void drawBarCell(uint8_t i) {
   const int x = cellX(i);
   const int y = cellY(i);
 
   tft.setTextDatum(lgfx::textdatum_t::top_left);
-  useGrid();
-  tft.setTextColor(COL_DIM, COL_BG);
+  useCaption();
+  tft.setTextColor(COL_CAPTION, COL_GRIDBG);
   tft.drawString(cells[i].label, x + PAD_X, y + LABEL_Y);
 
-  tft.fillRect(x + PAD_X, y + BAR_Y, TEXT_W, BAR_H, COL_GRID);
+  tft.fillRoundRect(x + PAD_X, y + BAR_Y, TEXT_W, BAR_H, 3, COL_BTN);
   const int w = (int)((uint32_t)cells[i].dialValue * (TEXT_W - 2) / 127);
   if (w > 0) tft.fillRect(x + PAD_X + 1, y + BAR_Y + 1, w, BAR_H - 2, COL_ACCENT);
 
   char v[4];
   snprintf(v, sizeof(v), "%u", (unsigned)cells[i].dialValue);
   tft.setTextDatum(lgfx::textdatum_t::middle_center);
-  tft.setTextColor(COL_TEXT, COL_BG);
+  useTitle();
+  tft.setTextColor(COL_TEXT, COL_GRIDBG);
   tft.drawString(v, x + CELL_W / 2, y + BAR_NUM_Y);
 }
 
@@ -794,7 +1022,7 @@ static float filterLevel(float f, uint8_t cutoff, uint8_t res) {
 // caption on the left and the number on the right.
 static void envReadout(int x, int y, int w, const char* cap, uint8_t v) {
   if (w < 8) return;
-  tft.fillRect(x, y + ENV_BAR_Y, w, ENV_BAR_H, COL_GRID);
+  tft.fillRect(x, y + ENV_BAR_Y, w, ENV_BAR_H, COL_BTN);
   const int fill = (int)((uint32_t)v * (uint32_t)(w - 2) / 127);
   if (fill > 0)
     tft.fillRect(x + 1, y + ENV_BAR_Y + 1, fill, ENV_BAR_H - 2, COL_ACCENT);
@@ -802,11 +1030,11 @@ static void envReadout(int x, int y, int w, const char* cap, uint8_t v) {
   char n[4];
   snprintf(n, sizeof(n), "%u", (unsigned)v);
   tft.setTextDatum(lgfx::textdatum_t::top_left);
-  useGrid();
-  tft.setTextColor(COL_DIM, COL_BG);
+  useCaption();
+  tft.setTextColor(COL_CAPTION, COL_GRIDBG);
   tft.drawString(cap, x, y + ENV_CAP_Y);
   tft.setTextDatum(lgfx::textdatum_t::top_right);
-  tft.setTextColor(COL_TEXT, COL_BG);
+  tft.setTextColor(COL_TEXT, COL_GRIDBG);
   tft.drawString(n, x + w, y + ENV_CAP_Y);
   tft.setTextDatum(lgfx::textdatum_t::top_left);
 }
@@ -980,7 +1208,7 @@ static void drawLfoSlice(uint8_t i) {
     char capColon[4][16];
     int capW[4], valW[4];
     int span = (int)(3 * LFO_READ_GAP);
-    useGrid();
+    useCaption();
     for (uint8_t k = 0; k < 4; k++) {
       snprintf(capColon[k], sizeof(capColon[k]), "%s:", lfoCap[k]);
       capW[k] = (int)ceilf(tft.textWidth(capColon[k])) + 4;   // + the space
@@ -991,9 +1219,9 @@ static void drawLfoSlice(uint8_t i) {
     if (px0 < 2) px0 = 2;              // more than the row holds: start at the edge
     tft.setTextDatum(lgfx::textdatum_t::top_left);
     for (uint8_t k = 0; k < 4; k++) {
-      tft.setTextColor(COL_DIM, COL_BG);
+      tft.setTextColor(COL_CAPTION, COL_GRIDBG);
       tft.drawString(capColon[k], px0, y + LFO_READ_Y);
-      tft.setTextColor(COL_TEXT, COL_BG);
+      tft.setTextColor(COL_TEXT, COL_GRIDBG);
       tft.drawString(lfoTxt[k], px0 + capW[k], y + LFO_READ_Y);
       px0 += capW[k] + valW[k] + LFO_READ_GAP;
     }
@@ -1010,54 +1238,79 @@ static void drawDialOnly(uint8_t i) {
   const int cx = x + CELL_W / 2;
   const int cy = y + DIAL_CY;
   tft.fillRect(cx - DIAL_CLR, cy - DIAL_CLR, DIAL_CLR * 2 + 1,
-               DIAL_CLR + DIAL_CLR_DOWN + 1, COL_BG);
+               DIAL_CLR + DIAL_CLR_DOWN + 1, COL_GRIDBG);
   drawDial(x, y, cells[i].dialValue);
+
+  // The box has to reach the pointer's lowest point (50, in the ring's open
+  // bottom notch), and that is inside the top of the CC caption's ink at 52.
+  // The caption is drawn back over the cleared rows: without it a knob step
+  // left every label with its top cut off, which read as the number being
+  // hidden behind the dial's own background.
+  tft.setTextDatum(lgfx::textdatum_t::middle_center);
+  useCaption();
+  tft.setTextColor(COL_CAPTION, COL_GRIDBG);
+  tft.drawString(cells[i].label, cx, y + DIAL_CAPTION_Y);
 }
 
 // ---------------------------------------------------------------------------
-// Control legend: three rows of buttons, left-aligned on one grid.
+// Control legend: three rows of buttons, 3 + 3 + 4 columns.
 //
 // The OLED's 5 + 4 slots are split 2 + 3 + 4 here so PREV / NEXT have a row to
-// themselves above the two control rows.  Every button is BTN_W wide - the
-// widest label there is, PROBABILITY at 11 characters - starts at BTN_X0 and
-// steps by BTN_W + BTN_GAP, so all three rows share four columns with the mode
-// row and sit on the same left edge as the cell captions above.  A label is
-// centred in its button, so TIE and PROBABILITY read the same way, and an
-// empty slot leaves its column standing instead of pulling the row left.
-// Positions no longer come from the text, so a change repaints the whole strip
-// (3 rows, ~2 ms) rather than one slot - it only happens on a mode or page
-// change, never on a knob turn.
+// themselves above the two control rows, and the mockup's column split does the
+// grouping: the first two rows are wide chips (150 px, 9 apart) because
+// PREV / NEXT and the three menus read as one group, the last row is four
+// narrow ones (111 px, 8 apart) because the attributes are short words.  Rows
+// start at the cell captions' left edge (6) and fill the 468 px, so the strip
+// lines up with the card above it and never re-flows when a label changes.
+//
+// An empty slot keeps its column standing as an outline instead of pulling the
+// row left, and the first row's third column has no slot at all - it gets the
+// same outline, which is what makes the top two rows read as one grid.
 //
 // One button can be ARMED: the chosen F radio, or the M button whose menu is
-// open.  It is filled with the accent and printed dark - the same treatment the
-// mode row gives the active mode - so the band says what the pads already say,
-// since a chosen F pad burns white (Modes.cpp).  The fill does not move any
-// label: the layout is the fixed grid either way.
+// open.  It is filled with the accent and printed dark, so the band says what
+// the pads already say, since a chosen F pad burns white (Modes.cpp).  The fill
+// does not move any label: the layout is the fixed grid either way.  Positions
+// come from the row's own column grid, so a change repaints the whole strip
+// (3 rows, ~2 ms) rather than one slot - it happens on a page change, never on
+// a knob turn.
 // ---------------------------------------------------------------------------
-static void drawLegendRow(uint8_t first, uint8_t count, int yCenter) {
+static int legendX(uint8_t row, uint8_t col) {
+  return (row < 2) ? GRID_X + col * (LEG_WIDE_W + LEG_WIDE_GAP)
+                   : GRID_X + col * (LEG_NARROW_W + LEG_NARROW_GAP);
+}
+static int legendW(uint8_t row) {
+  return (row < 2) ? LEG_WIDE_W : LEG_NARROW_W;
+}
+
+static void drawLegendRow(uint8_t row, uint8_t first, uint8_t count) {
+  const int y = LEGEND_Y + row * LEGEND_SLOT_H;
+  const int w = legendW(row);
   tft.setTextDatum(lgfx::textdatum_t::middle_center);
   useGrid();
   for (uint8_t k = 0; k < count; k++) {
-    if (!legendText[first + k][0]) continue;
-    const int bx = BTN_X0 + k * (BTN_W + BTN_GAP);  // 6 / 126 / 246 / 366
+    const int bx = legendX(row, k);
+    if (!legendText[first + k][0]) {          // empty: the column stays standing
+      tft.drawRoundRect(bx, y, w, BTN_H, BTN_R, COL_EDGE);
+      continue;
+    }
     const bool on = legendSel[first + k];
-    tft.fillRoundRect(bx, yCenter - BTN_H / 2, BTN_W, BTN_H, BTN_R,
-                      on ? COL_ACCENT : COL_BAND);
-    tft.setTextColor(on ? COL_BG : COL_DIM, on ? COL_ACCENT : COL_BAND);
-    tft.drawString(legendText[first + k], bx + BTN_W / 2, yCenter);
+    tft.fillRoundRect(bx, y, w, BTN_H, BTN_R, on ? COL_ACCENT : COL_BG);
+    tft.drawRoundRect(bx, y, w, BTN_H, BTN_R, on ? COL_ACCENT : COL_EDGE);
+    tft.setTextColor(on ? COL_BG : COL_CAPTION, on ? COL_ACCENT : COL_BG);
+    tft.drawString(legendText[first + k], bx + w / 2, y + BTN_H / 2);
   }
-  tft.setTextColor(COL_DIM, COL_BG);  // back to the default for later draws
+  tft.setTextColor(COL_CAPTION, COL_BG);  // back to the default for later draws
 }
 
-// The strip is background-coloured so the chips stand out of it the way the
-// mode buttons stand out of the mode row; the hairline keeps the grid above it
-// separate.  Rows are centred at +17 / +51 / +85 in their 34 px band.
+// The strip is page-coloured so the chips stand out of it; there is no hairline
+// above it (the help card's outline closes the band).
 static void drawLegendBand() {
   tft.fillRect(0, LEGEND_Y, PANEL_W, PANEL_H - LEGEND_Y, COL_BG);
-  tft.drawFastHLine(0, LEGEND_Y, PANEL_W, COL_GRID);
-  drawLegendRow(0, 2, LEGEND_Y + LEGEND_SLOT_H / 2);
-  drawLegendRow(2, 3, LEGEND_Y + LEGEND_SLOT_H + LEGEND_SLOT_H / 2);
-  drawLegendRow(5, 4, LEGEND_Y + LEGEND_SLOT_H * 2 + LEGEND_SLOT_H / 2);
+  drawLegendRow(0, 0, 2);
+  tft.drawRoundRect(legendX(0, 2), LEGEND_Y, legendW(0), BTN_H, BTN_R, COL_EDGE);
+  drawLegendRow(1, 2, 3);
+  drawLegendRow(2, 5, 4);
 }
 
 // ---------------------------------------------------------------------------
@@ -1071,7 +1324,9 @@ void scrBegin() {
   tft.setTextWrap(false);
   tft.fillScreen(COL_BG);
   headerDirty = true;
-  modeDirty = true;
+  statusDirty = true;
+  laneDirty = true;
+  helpDirty = true;
   mainDirty = true;
 }
 
@@ -1112,6 +1367,14 @@ void scrClear() {
     legendSel[i] = false;
   }
   legendDirty = false;
+  statusText[0] = '\0';
+  statusDirty = true;
+  laneChan = 0;
+  laneUsed = 0;
+  lanePlay = 0xFF;
+  lanePlayDrawn = 0xFF;
+  laneDirty = true;
+  helpDirty = true;
   mainDirty = true;   // one band repaint draws the blank model back
 }
 
@@ -1129,17 +1392,47 @@ void scrHeader(const char* left, const char* right, bool transient) {
   if (strcmp(l, headerLeft) == 0 && strcmp(r, headerRight) == 0 &&
       transient == headerTransient)
     return;
+  const bool labelMoved = (strcmp(l, headerLeft) != 0);
   memcpy(headerLeft, l, sizeof(l));
   memcpy(headerRight, r, sizeof(r));
   headerTransient = transient;
   headerDirty = true;
+  if (labelMoved) helpDirty = true;   // the help row describes the new page
 }
 
+// The family is named in the header now that the mode row is gone, so this only
+// remembers which one is active: the help row falls back on it when the header
+// carries a page name instead.
 void scrModeRow(uint8_t active) {
   if (active >= 3) active = SCR_MODE_NONE;
-  if (active == activeMode) return;
   activeMode = active;
-  modeDirty = true;
+}
+
+// SC01 only: the header's status slot, drawn when nothing is being announced
+// and no persistent note owns the slot.  It has its own repaint box, because it
+// changes on every step while the name beside it does not.
+void scrStatus(const char* text) {
+  char buf[sizeof(statusText)];
+  copyText(buf, sizeof(buf), text);
+  if (strcmp(buf, statusText) == 0) return;
+  memcpy(statusText, buf, sizeof(buf));
+  statusDirty = true;
+}
+
+// SC01 only: the step lane under the header.  `chan` is the channel the current
+// mode is working on (1..16; 0 lights none) - its square is the one filled in
+// the accent - `used` a bit per slot for a step that carries notes, `play` the
+// pad the playhead is on (0xFF for none).  A playhead move on its own repaints
+// two chips, not the sixteen.
+void scrStepLane(uint8_t chan, uint16_t used, uint8_t play) {
+  if (chan > LANE_SLOTS) chan = 0;
+  if (play >= LANE_SLOTS) play = 0xFF;
+  if (chan != laneChan || used != laneUsed) {
+    laneChan = chan;
+    laneUsed = used;
+    laneDirty = true;
+  }
+  lanePlay = play;
 }
 
 void scrCellLabel(uint8_t i, const char* text) {
@@ -1318,14 +1611,21 @@ void scrLegendSel(uint8_t i, bool on) {
 // crawl, so the frame goes out in one pass again and the dispatch in between is
 // what keeps the beat on time (one region of latency, not one frame).
 void scrUpdate() {
-  if (modeDirty) {
-    drawModes();
-    modeDirty = false;
+  // The lane goes first: its playhead is the one thing that moves without an
+  // event of its own, and a full lane is sixteen chips.
+  if (laneDirty) {
+    drawStepLane();
+    laneDirty = false;
     seqStepBreath();
+  } else if (lanePlay != lanePlayDrawn) {
+    drawLanePlay();
   }
   if (mainDirty) {
-    // No band-wide fill: the eight cell repaints cover MAIN_Y..217 completely
-    // and each one draws its own separators back
+    // The card's ground goes down once.  The eight cell repaints cover its
+    // middle, but not the rounded corners the frame leaves showing - and the
+    // grid is meant to read as a black card, not as a lighter one behind black
+    // cells.  Each cell still draws only its own rectangle.
+    tft.fillRoundRect(GRID_X, GRID_Y, GRID_W, CELL_H * 2, GRID_R, COL_GRIDBG);
     for (uint8_t i = 0; i < SCR_CELLS; i++) {
       cellDirty[i] = true;
       dialDirty[i] = false;
@@ -1350,9 +1650,19 @@ void scrUpdate() {
     legendDirty = false;
     seqStepBreath();
   }
+  if (helpDirty) {
+    drawHelp();
+    helpDirty = false;
+    seqStepBreath();
+  }
+  if (statusDirty) {
+    drawStatus();
+    statusDirty = false;
+  }
   if (headerDirty) {
     drawHeader();
     headerDirty = false;
+    statusDirty = false;   // the header draw wrote the slot as well
   }
 }
 

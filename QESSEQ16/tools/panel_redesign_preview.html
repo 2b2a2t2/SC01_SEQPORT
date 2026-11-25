@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QESSEQ16 — SC01 panel redesign (rough render)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 18px 22px 28px; background: #0a1014; color: #c9cdd2;
+         font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  h1 { font-size: 14px; font-weight: 600; letter-spacing: .04em; margin: 0 0 4px; color: #e8ebee; }
+  p.note { margin: 0 0 14px; color: #7e858d; max-width: 980px; }
+  .wrap { display: inline-block; border: 1px solid #292929; line-height: 0; background: #000000; }
+  canvas { width: 960px; height: 640px; image-rendering: pixelated; display: block; }
+  table { border-collapse: collapse; margin-top: 12px; color: #8b9299; }
+  td { padding: 1px 18px 1px 0; }
+  td:first-child { color: #e8ebee; }
+</style>
+</head>
+<body>
+<h1>SC01 panel 480 &times; 320 &mdash; toward the mockup, at 2&times;</h1>
+<p class="note">
+  Rough render, not the firmware. Geometry is the panel's real estate, not the mockup's
+  3&times; picture: header 0..35, step lane 37..64 (sixteen numbered squares on black, the
+  channel the current mode is on lit), cells
+  66..195 in two 65 px rows, the help row 197..234, legend 236..313 in three 26 px rows,
+  with one pixel of air (plain background, no line) between the bands.
+  Glyphs are a monospace stand-in for the Nasalization bitmaps (16 px values, 10 px captions),
+  and there is no glow: the TFT draws flat 16-bit colour only.
+</p>
+
+<div class="wrap"><canvas id="panel" width="960" height="640"></canvas></div>
+
+<table>
+  <tr><td>header</td><td>0..35</td><td>title 16 px, status 12 px, accent rule at 34</td></tr>
+  <tr><td>step lane</td><td>37..64</td><td>16 squares 25 &times; 22 on black, 3 px of air, the mode's channel lit</td></tr>
+  <tr><td>cells</td><td>66..195</td><td>2 &times; 65, caption 10 px over value 16 px</td></tr>
+  <tr><td>help row</td><td>197..234</td><td>icon | name + one-line explanation | visual hint</td></tr>
+  <tr><td>legend</td><td>236..313</td><td>3 + 3 + 4 columns, 6 px left under it</td></tr>
+</table>
+
+<script>
+"use strict";
+
+/* ---- panel geometry (480 x 320) ------------------------------------ */
+const PANEL_W = 480, PANEL_H = 320;
+const PAD = 1;                       // air between the vertical elements
+const HDR_H = 36;                    // title + status, accent rule on its bottom
+const LANE_Y = HDR_H + PAD, LANE_H = 28;                 // 37..64
+const GRID_X = 6, GRID_W = 468, CELL_H = 65, CELL_W = 117;
+const GRID_Y = LANE_Y + LANE_H + PAD;                    // 66
+const INFO_Y = GRID_Y + CELL_H * 2 + PAD, INFO_H = 38;   // 197..234
+const LEG_Y = INFO_Y + INFO_H + PAD;                     // 236
+const LEG_ROW_H = 26, LEG_BTN_H = 24;
+
+/* ---- palette ------------------------------------------------------- */
+const BG = "#000000", CARD = "#1c1c1c", STROKE = "#292929", EDGE = "#4a4a4a",
+      BTN = "#1c1c1c", ACCENT = "#00ffff", VALUE = "#ffffff", CAPTION = "#c6c6c6",
+      DIM = "#8c8c8c", LANE = "#000000", STEPON = "#000000";
+
+const STEPS = 16;
+
+const g = document.getElementById("panel").getContext("2d");
+g.scale(2, 2);
+g.textBaseline = "top";
+
+function font(px) { g.font = px + "px ui-monospace, SFMono-Regular, Menlo, monospace"; }
+
+function round(x, y, w, h, r, fill, stroke) {
+  g.beginPath();
+  g.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, r);
+  if (fill) { g.fillStyle = fill; g.fill(); }
+  if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1; g.stroke(); }
+}
+
+function label(text, px, x, y, color, align) {
+  font(px);
+  g.fillStyle = color;
+  g.textAlign = align || "left";
+  g.fillText(text, x, y);
+  g.textAlign = "left";
+}
+
+/* ---- header -------------------------------------------------------- */
+g.fillStyle = BG;
+g.fillRect(0, 0, PANEL_W, PANEL_H);
+
+label("SEQUENCER", 16, 12, 8, VALUE);
+label("TRACK 02 - STEP 08/16", 12, PANEL_W - 12, 12, CAPTION, "right");
+g.fillStyle = ACCENT;
+g.fillRect(0, HDR_H - 2, PANEL_W, 1);
+
+/* ---- step lane: sixteen numbered squares, the mode's channel lit ---- */
+{
+  const slotW = 25, gap = 4, x0 = 10, barY = LANE_Y + 3, barH = 22;
+  const CHAN = 2, NOTES = 8, PLAY = 8;
+  for (let i = 0; i < STEPS; i++) {
+    const x = x0 + i * (slotW + gap);
+    const n = i + 1;
+    const on = n === CHAN, used = n === NOTES, play = n === PLAY;
+    round(x, barY, slotW, barH, 3, on ? ACCENT : (used ? STEPON : LANE),
+          on ? ACCENT : (used ? ACCENT : EDGE));
+    label(String(n), 10, x + slotW / 2, barY + 7, on ? BG : DIM, "center");
+    if (play) {
+      g.fillStyle = on ? BG : ACCENT;
+      g.fillRect(x + 3, barY + barH - 4, slotW - 6, 2);
+    }
+  }
+}
+
+/* ---- the eight cells ----------------------------------------------- */
+{
+  const cells = [["OCTAVE", "0"], ["LISTEN", "CHORD"], ["PLAY", "GATE"], ["OVERDUB", "OFF"],
+                 ["GATE", "49%"], ["VELOCITY", "53"], ["ACCENT", "101"],
+                 ["PROBABILITY", "100%"]];
+
+  round(GRID_X, GRID_Y, GRID_W, CELL_H * 2, 6, CARD, STROKE);
+
+  // inner dividers, one pixel, in the stroke colour
+  g.fillStyle = STROKE;
+  for (let c = 1; c < 4; c++)
+    g.fillRect(GRID_X + c * CELL_W, GRID_Y + 1, 1, CELL_H * 2 - 2);
+  g.fillRect(GRID_X + 1, GRID_Y + CELL_H, GRID_W - 2, 1);
+
+  cells.forEach(([caption, value], i) => {
+    const x = GRID_X + (i & 3) * CELL_W + 10;
+    const y = GRID_Y + (i >> 2) * CELL_H;
+    label(caption, 10, x, y + 8, CAPTION);
+    label(value, 16, x, y + 24, VALUE);
+  });
+}
+
+/* ---- help row ------------------------------------------------------ */
+{
+  round(GRID_X, INFO_Y, GRID_W, INFO_H, 6, BG, EDGE);
+
+  // gate shape icon: two held notes and the air between them
+  g.strokeStyle = ACCENT;
+  g.lineWidth = 2;
+  g.beginPath();
+  const top = INFO_Y + 11, bot = INFO_Y + 26;
+  g.moveTo(16, bot); g.lineTo(22, bot);
+  g.lineTo(22, top); g.lineTo(36, top); g.lineTo(36, bot);
+  g.lineTo(44, bot); g.lineTo(44, top); g.lineTo(64, top); g.lineTo(64, bot);
+  g.lineTo(72, bot); g.lineTo(72, INFO_Y + 19); g.lineTo(96, INFO_Y + 19);
+  g.stroke();
+
+  g.fillStyle = STROKE;
+  g.fillRect(108, INFO_Y + 6, 1, INFO_H - 12);
+
+  // the firmware's help row: the page's name and one line saying what it is for
+  label("SEQUENCER", 12, 118, INFO_Y + 4, VALUE);
+  label("Steps, page and track config", 10, 118, INFO_Y + 21, CAPTION);
+}
+
+/* ---- legend: 3 + 3 + 4 columns ------------------------------------- */
+function btn(x, y, w, text, on) {
+  round(x, y, w, LEG_BTN_H, 5, on ? ACCENT : BG, on ? ACCENT : EDGE);
+  if (text) label(text, 12, x + w / 2, y + 5, on ? "#000000" : CAPTION, "center");
+}
+
+{
+  const wide = 152, narrow = 111;
+  const y1 = LEG_Y, y2 = LEG_Y + LEG_ROW_H, y3 = LEG_Y + LEG_ROW_H * 2;
+
+  btn(6, y1, wide, "PREV");
+  btn(166, y1, wide, "NEXT");
+  round(326, y1, 148, LEG_BTN_H, 5, null, EDGE);   // empty slot keeps the column
+
+  btn(6, y2, wide, "EDIT", true);
+  btn(166, y2, wide, "BASS");
+  btn(326, y2, wide, "GENERATE");
+
+  btn(6, y3, narrow, "TIE");
+  btn(125, y3, narrow, "GLIDE");
+  btn(244, y3, narrow, "ACCENT");
+  btn(363, y3, narrow, "PROBABILITY");
+}
+</script>
+</body>
+</html>

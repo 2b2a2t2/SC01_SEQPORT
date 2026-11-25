@@ -8,8 +8,10 @@
 // header strip, eight knob cells (four per row), and nine control-legend
 // slots.  The drawing itself lives behind Screen.h, so the same content runs
 // on the Teensy's 128x64 SSD1306 and on the SC01 Plus 480x320 panel - the
-// latter with the layout SC01_SEQPORT.ino was designed on (header band, mode
-// row, 4x2 cells of 120x75, three rows of legend buttons, CC dials).
+// latter with a header (name + a status slot the temporary message borrows),
+// a step lane, one card of 4x2 cells at 117x65, a help row and a 3 + 3 + 4
+// legend, plus CC dials.  The step lane and the status slot are panel-only:
+// scrStepLane() and scrStatus() are no-ops on the 128x64 strip.
 
 #define HEADER_MS   2500
 

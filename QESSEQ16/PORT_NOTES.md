@@ -22,9 +22,9 @@ Both defined, or neither, stops the build with an `#error`.
 | --- | --- |
 | `Config.h` | the switch + `#error` guards |
 | `PanelSC01.h` | ST7796 480x320 / FT5x06 / PWM backlight panel description (copied from `../PanelSC01.h`) |
-| `Screen.h` | the drawing layer both panels implement: header, 8 knob cells, 9 legend slots, dials |
+| `Screen.h` | the drawing layer both panels implement: header, 8 knob cells, 9 legend slots, dials, plus the panel-only step lane and status slot |
 | `ScreenOled.cpp` | Teensy 4.1 backend: the 128x64 SSD1306, drawn exactly as before |
-| `ScreenPanel.cpp` | SC01 backend: the 480x320 layout from `SC01_SEQPORT/Display.cpp` (header band, mode row, 4x2 cells of 120x94, legend band, CC dials) |
+| `ScreenPanel.cpp` | SC01 backend: the 480x320 layout (header with the name and a 12 px status slot, the step lane, one rounded card of 4x2 cells at 117x65 with 10 px captions over 16 px values, the help row, the legend in 3 + 3 + 4 columns, CC dials) |
 | `UsbMidiShim.h/.cpp` | a Teensy-shaped `usbMIDI` object on top of the ESP32 core's TinyUSB `USBMIDI` (empty on the Teensy) |
 | `PORT_NOTES.md` | this file |
 

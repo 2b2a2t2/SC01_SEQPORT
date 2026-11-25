@@ -92,6 +92,10 @@ void scrHeader(const char* left, const char* right, bool transient) {
 }
 
 void scrModeRow(uint8_t) {}   // 128x64: the family is named in the header
+// The panel's step lane and status slot have no counterpart here: the strip is
+// 128 px wide, its header is one line and the pads are already the step picture.
+void scrStatus(const char*) {}
+void scrStepLane(uint8_t, uint16_t, uint8_t) {}
 
 static int cellX(uint8_t i) { return (i & 3) * SCR_COL_W + 1; }
 static int cellLabelY(uint8_t i) { return (i >> 2) ? 38 : 22; }

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QESSEQ16 — SC01 panel layout (rough render)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 18px 22px 28px; background: #101214; color: #c9cdd2;
+         font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  h1 { font-size: 14px; font-weight: 600; letter-spacing: .04em; margin: 0 0 4px; color: #e8ebee; }
+  p.note { margin: 0 0 14px; color: #7e858d; max-width: 980px; }
+  .wrap { display: inline-block; border: 1px solid #2a2f35; line-height: 0; background: #000; }
+  canvas { width: 960px; height: 640px; image-rendering: pixelated; display: block; }
+  .bands { color: #7e858d; margin: 8px 0 26px; }
+  .bands b { color: #00e5ff; font-weight: 500; }
+</style>
+</head>
+<body>
+<h1>SC01 panel 480 &times; 320 &mdash; the new geometry, at 2&times;</h1>
+<p class="note">
+  Rough render, not the firmware: the proportions, the band splits and the pixel
+  positions come from the constants in <code>ScreenPanel.cpp</code> (header 0..57,
+  mode row 58..89, cells 90..223 at 120&nbsp;&times;&nbsp;67, legend 224..319 in three
+  32&nbsp;px rows), the glyphs are a monospace stand-in for the Nasalization bitmaps,
+  so text widths are only indicative.
+</p>
+
+<div class="wrap"><canvas id="dials" width="960" height="640"></canvas></div>
+<div class="bands"><b>header</b> 0..57: 16 px label + 10 px temporary message &nbsp;&middot;&nbsp;
+  <b>mode row</b> 58..89 &nbsp;&middot;&nbsp; <b>cells</b> 2 &times; 67 &nbsp;&middot;&nbsp;
+  <b>legend</b> 3 &times; 32</div>
+
+<div class="wrap"><canvas id="text" width="960" height="640"></canvas></div>
+<div class="bands">same layout with the message line empty and the cells in their
+  caption-over-value form (one value wrapping onto its second line)</div>
+
+<script>
+"use strict";
+
+/* ---- ScreenPanel.cpp constants ------------------------------------- */
+const PANEL_W = 480, PANEL_H = 320;
+const HEADER_H = 58, HEADER_TEXT_Y = 4, NOTE_TEXT_Y = 34;
+const MODE_Y = HEADER_H, MODE_H = 32, MAIN_Y = MODE_Y + MODE_H;      // 90
+const CELL_W = 120, CELL_H = 67;
+const LEGEND_Y = PANEL_H - 32 * 3;                                  // 224
+const PAD_X = 6, TEXT_W = 108, LABEL_Y = 10, VALUE_Y = 29, TEXT_H = 12;
+const BTN_H = 24, BTN_R = 6, BTN_W = 104, BTN_GAP = 16, BTN_X0 = 6;
+const DIAL_CY = 30, DIAL_R = 24, DIAL_CAPTION_Y = 53;
+
+const COL_BG = "#000000", COL_BAND = "#1a1c1a", COL_GRID = "#292c29",
+      COL_DIM = "#8c8e8c", COL_TEXT = "#ffffff", COL_ACCENT = "#00ffff";
+
+const MODES = ["ENCODER", "SEQUENCER", "KEYBOARD"];
+
+/* ---- drawing ------------------------------------------------------- */
+function make(id) {
+  const c = document.getElementById(id);
+  const g = c.getContext("2d");
+  g.scale(2, 2);
+  g.textBaseline = "top";
+  return g;
+}
+
+function font(g, px) { g.font = px + "px ui-monospace, SFMono-Regular, Menlo, monospace"; }
+
+function button(g, x, yCenter, w, label, on) {
+  g.fillStyle = on ? COL_ACCENT : COL_BAND;
+  g.beginPath();
+  g.roundRect(x, yCenter - BTN_H / 2, w, BTN_H, BTN_R);
+  g.fill();
+  font(g, 12);
+  g.fillStyle = on ? "#000" : COL_DIM;
+  g.textAlign = "center";
+  g.fillText(label, x + w / 2, yCenter - 6);
+  g.textAlign = "left";
+}
+
+function drawHeader(g, left, message) {
+  g.fillStyle = COL_BAND;
+  g.fillRect(0, 0, PANEL_W, HEADER_H - 2);
+  g.fillStyle = COL_ACCENT;
+  g.fillRect(0, HEADER_H - 2, PANEL_W, 2);
+
+  font(g, 16);
+  g.fillStyle = COL_TEXT;
+  g.fillText(left, 12, HEADER_TEXT_Y);
+
+  if (message) {                       // the message line, 10 px, full width
+    font(g, 10);
+    g.fillStyle = COL_ACCENT;
+    g.fillText(message, 12, NOTE_TEXT_Y);
+  }
+}
+
+function drawModes(g, active) {
+  for (let i = 0; i < 3; i++)
+    button(g, BTN_X0 + i * (BTN_W + BTN_GAP), MODE_Y + MODE_H / 2, BTN_W, MODES[i], i === active);
+  g.fillStyle = COL_GRID;
+  g.fillRect(0, MODE_Y + MODE_H - 1, PANEL_W, 1);
+}
+
+function cellPos(i) { return { x: (i & 3) * CELL_W, y: MAIN_Y + (i >> 2) * CELL_H }; }
+
+function cellEdges(g, i) {
+  const { x, y } = cellPos(i);
+  g.fillStyle = COL_GRID;
+  if (i & 3) g.fillRect(x, y + 8, 1, CELL_H - 16);
+  if (i >> 2) g.fillRect(x, y, CELL_W, 1);
+}
+
+function drawTextCell(g, i, caption, value) {
+  const { x, y } = cellPos(i);
+  g.fillStyle = COL_BG;
+  g.fillRect(x, y, CELL_W, CELL_H);
+  font(g, 12);
+  g.fillStyle = COL_DIM;
+  g.fillText(caption, x + PAD_X, y + LABEL_Y);
+  g.fillStyle = COL_TEXT;
+
+  // the firmware's wrap: cut at the last space that still fits 108 px
+  const words = value.split(" ");
+  let line = "", row = 0, shown = "";
+  for (const w of words) {
+    const next = line ? line + " " + w : w;
+    if (g.measureText(next).width <= TEXT_W) { line = next; continue; }
+    shown = line || w;
+    g.fillText(shown, x + PAD_X, y + VALUE_Y + row * TEXT_H);
+    row++;
+    if (row > 1) break;
+    line = line ? w : "";
+  }
+  if (row <= 1 && line) g.fillText(line, x + PAD_X, y + VALUE_Y + row * TEXT_H);
+  cellEdges(g, i);
+}
+
+function drawDialCell(g, i, caption, val) {
+  const { x, y } = cellPos(i);
+  const cx = x + CELL_W / 2, cy = y + DIAL_CY;
+  g.fillStyle = COL_BG;
+  g.fillRect(x, y, CELL_W, CELL_H);
+
+  g.strokeStyle = COL_GRID;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(cx, cy, DIAL_R - 1.5, 135 * Math.PI / 180, 405 * Math.PI / 180);
+  g.stroke();
+
+  const a = (135 + 270 * val / 127) * Math.PI / 180;
+  g.strokeStyle = COL_ACCENT;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(cx + Math.cos(a) * (DIAL_R - 6), cy + Math.sin(a) * (DIAL_R - 6));
+  g.lineTo(cx + Math.cos(a) * (DIAL_R + 4), cy + Math.sin(a) * (DIAL_R + 4));
+  g.stroke();
+
+  font(g, 12);
+  g.fillStyle = COL_TEXT;
+  g.textAlign = "center";
+  g.fillText(String(val), cx, cy - 6);
+  g.fillStyle = COL_DIM;
+  g.fillText(caption, cx, y + DIAL_CAPTION_Y);
+  g.textAlign = "left";
+  cellEdges(g, i);
+}
+
+function drawLegend(g, rows, armed) {
+  g.fillStyle = COL_GRID;
+  g.fillRect(0, LEGEND_Y, PANEL_W, 1);
+  rows.forEach((row, r) => {
+    const yc = LEGEND_Y + r * 32 + 16;
+    row.forEach((label, k) => {
+      if (label) button(g, BTN_X0 + k * (BTN_W + BTN_GAP), yc, BTN_W, label, k === armed[r]);
+    });
+  });
+}
+
+/* ---- state 1: ENCODER, CC dials, message on its line ---------------- */
+{
+  const g = make("dials");
+  drawHeader(g, "ENCODER 1", "Pattern Length 16");
+  drawModes(g, 0);
+  const cc = [["CC 17", 64], ["CC 18", 20], ["CC 19", 90], ["CC 20", 12],
+              ["CUTOFF", 63], ["RESO", 96], ["VOLUME", 110], ["PAN", 64]];
+  cc.forEach(([cap, v], i) => drawDialCell(g, i, cap, v));
+  drawLegend(g, [["PREV", "NEXT"], ["M1", "M2", "M3"],
+                 ["TIE", "GLIDE", "ACCENT", "PROBABILITY"]], [0, 0, 0]);
+}
+
+/* ---- state 2: SEQUENCER, caption over value, empty message line ---- */
+{
+  const g = make("text");
+  drawHeader(g, "SEQUENCER 2", "");
+  drawModes(g, 1);
+  const cells = [["CHANNEL", "1"], ["PATTERN", "3"], ["LENGTH", "16"],
+                 ["SCALE", "Harmonic Minor"], ["ROOT", "C"], ["GATE", "72"],
+                 ["SWING", "54"], ["VELOCITY", "100"]];
+  cells.forEach(([cap, v], i) => drawTextCell(g, i, cap, v));
+  drawLegend(g, [["PREV", "NEXT"], ["M2", "M3", "M4"],
+                 ["COPY", "PASTE", "CLEAR", "RANDOMISE"]], [0, 1, 0]);
+}
+</script>
+</body>
+</html>
