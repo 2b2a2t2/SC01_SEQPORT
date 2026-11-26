@@ -51,11 +51,15 @@ void scrModeRow(uint8_t active);
 // 128x64 strip, whose header has no room beside the label.
 void scrStatus(const char* text);
 // SC01 only: the step lane under the header, one numbered square per pad of the
-// edit window.  `chan` is the channel the current mode is working on (1..16; 0
-// lights none) and fills that pad's square, `used` a bit per slot with notes,
-// `play` the pad the playhead is on (0xFF for none).  No-op on the 128x64 strip:
-// there the pads themselves are the picture.
-void scrStepLane(uint8_t chan, uint16_t used, uint8_t play);
+// edit window, each square carrying its own pad number (1..16).  Every mode
+// marks the same three channels at once: the encoder bank's channel is outlined
+// in cyan, the sequence's edit channel is lit, the keyboard's channel is
+// underlined (the KEYMODE3 lock puts all three on one square).  `used` is a bit
+// per slot with notes - its number is drawn white rather than grey - and `play`
+// the pad the playhead is on (0xFF for none).  The three channels are read
+// inside the panel, so an encoder or keyboard channel move repaints the lane
+// too.  No-op on the 128x64 strip: there the pads themselves are the picture.
+void scrStepLane(uint16_t used, uint8_t play);
 
 void scrCellLabel(uint8_t i, const char* text);       // caption over the value
 void scrCellLabelSmall(uint8_t i, const char* text);  // ENCABLETONMODE names

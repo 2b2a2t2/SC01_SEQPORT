@@ -20,8 +20,9 @@
 <h1>SC01 panel 480 &times; 320 &mdash; toward the mockup, at 2&times;</h1>
 <p class="note">
   Rough render, not the firmware. Geometry is the panel's real estate, not the mockup's
-  3&times; picture: header 0..35, step lane 37..64 (sixteen numbered squares on black, the
-  channel the current mode is on lit), cells
+  3&times; picture: header 0..35, step lane 37..64 (sixteen squares numbered 1..16 on black &mdash;
+  the encoder channel's square edged in cyan, the sequencer's filled, the keyboard's number
+  underlined), cells
   66..195 in two 65 px rows, the help row 197..234, legend 236..313 in three 26 px rows,
   with one pixel of air (plain background, no line) between the bands.
   Glyphs are a monospace stand-in for the Nasalization bitmaps (16 px values, 10 px captions),
@@ -32,7 +33,7 @@
 
 <table>
   <tr><td>header</td><td>0..35</td><td>title 16 px, status 12 px, accent rule at 34</td></tr>
-  <tr><td>step lane</td><td>37..64</td><td>16 squares 25 &times; 22 on black, 3 px of air, the mode's channel lit</td></tr>
+  <tr><td>step lane</td><td>37..64</td><td>16 squares 25 &times; 22 on black, 3 px of air, pad numbers 1..16: encoder channel edged, sequence channel filled, keyboard channel underlined, playhead at the bottom</td></tr>
   <tr><td>cells</td><td>66..195</td><td>2 &times; 65, caption 10 px over value 16 px</td></tr>
   <tr><td>help row</td><td>197..234</td><td>icon | name + one-line explanation | visual hint</td></tr>
   <tr><td>legend</td><td>236..313</td><td>3 + 3 + 4 columns, 6 px left under it</td></tr>
@@ -55,7 +56,7 @@ const LEG_ROW_H = 26, LEG_BTN_H = 24;
 /* ---- palette ------------------------------------------------------- */
 const BG = "#000000", CARD = "#1c1c1c", STROKE = "#292929", EDGE = "#4a4a4a",
       BTN = "#1c1c1c", ACCENT = "#00ffff", VALUE = "#ffffff", CAPTION = "#c6c6c6",
-      DIM = "#8c8c8c", LANE = "#000000", STEPON = "#000000";
+      DIM = "#8c8c8c";
 
 const STEPS = 16;
 
@@ -89,19 +90,32 @@ label("TRACK 02 - STEP 08/16", 12, PANEL_W - 12, 12, CAPTION, "right");
 g.fillStyle = ACCENT;
 g.fillRect(0, HDR_H - 2, PANEL_W, 1);
 
-/* ---- step lane: sixteen numbered squares, the mode's channel lit ---- */
+/* ---- step lane: sixteen numbered squares, three channel marks at once ---
+   The firmware reads the three channels in ScreenPanel.cpp, in every mode.
+   Set SEQ = ENC = KEY to see the KEYMODE3 locked square: fill, edge and
+   underline all land on the same pad.                                             */
 {
   const slotW = 25, gap = 4, x0 = 10, barY = LANE_Y + 3, barH = 22;
-  const CHAN = 2, NOTES = 8, PLAY = 8;
+  const SEQ = 5, ENC = 11, KEY = 14, NOTES = 8, PLAY = 3;
   for (let i = 0; i < STEPS; i++) {
     const x = x0 + i * (slotW + gap);
     const n = i + 1;
-    const on = n === CHAN, used = n === NOTES, play = n === PLAY;
-    round(x, barY, slotW, barH, 3, on ? ACCENT : (used ? STEPON : LANE),
-          on ? ACCENT : (used ? ACCENT : EDGE));
-    label(String(n), 10, x + slotW / 2, barY + 7, on ? BG : DIM, "center");
-    if (play) {
-      g.fillStyle = on ? BG : ACCENT;
+    const lit = n === SEQ, edge = n === ENC, under = n === KEY,
+          used = n === NOTES, play = n === PLAY;
+    // a cyan edge on a cyan fill would show nothing, so a lit square's outline
+    // is drawn in the page's black instead
+    round(x, barY, slotW, barH, 3, lit ? ACCENT : BG,
+          edge ? (lit ? BG : ACCENT) : (lit ? ACCENT : EDGE));
+    const cx = x + slotW / 2;
+    g.textBaseline = "middle";   // the firmware centres the number's 11 px box
+    label(String(n), 10, cx, barY + 8, lit ? BG : (used ? VALUE : DIM), "center");
+    g.textBaseline = "top";
+    if (under) {                 // the keyboard channel's number is underlined
+      g.fillStyle = lit ? BG : ACCENT;
+      g.fillRect(cx - 7, barY + 13, 14, 2);
+    }
+    if (play) {                  // the playhead: a bar at the square's bottom
+      g.fillStyle = lit ? BG : ACCENT;
       g.fillRect(x + 3, barY + barH - 4, slotW - 6, 2);
     }
   }
@@ -109,11 +123,16 @@ g.fillRect(0, HDR_H - 2, PANEL_W, 1);
 
 /* ---- the eight cells ----------------------------------------------- */
 {
+  // the cell's own insets from ScreenPanel.cpp: text top-left at 8 / 7 / 21,
+  // one line of the 16 px face is 17 px, so a wrapped value's second line
+  // lands 17 px under the first ("Harmonic Minor" over two lines)
+  const PAD_X = 8, LABEL_Y = 7, VALUE_Y = 21, VAL_H = 17;
   const cells = [["OCTAVE", "0"], ["LISTEN", "CHORD"], ["PLAY", "GATE"], ["OVERDUB", "OFF"],
                  ["GATE", "49%"], ["VELOCITY", "53"], ["ACCENT", "101"],
-                 ["PROBABILITY", "100%"]];
+                 ["SCALE", "Harmonic\nMinor"]];
 
-  round(GRID_X, GRID_Y, GRID_W, CELL_H * 2, 6, CARD, STROKE);
+  // the card is the grid's black with #292929 hairlines, not a grey card
+  round(GRID_X, GRID_Y, GRID_W, CELL_H * 2, 6, BG, STROKE);
 
   // inner dividers, one pixel, in the stroke colour
   g.fillStyle = STROKE;
@@ -122,16 +141,17 @@ g.fillRect(0, HDR_H - 2, PANEL_W, 1);
   g.fillRect(GRID_X + 1, GRID_Y + CELL_H, GRID_W - 2, 1);
 
   cells.forEach(([caption, value], i) => {
-    const x = GRID_X + (i & 3) * CELL_W + 10;
+    const x = GRID_X + (i & 3) * CELL_W + PAD_X;
     const y = GRID_Y + (i >> 2) * CELL_H;
-    label(caption, 10, x, y + 8, CAPTION);
-    label(value, 16, x, y + 24, VALUE);
+    label(caption, 10, x, y + LABEL_Y, CAPTION);
+    value.split("\n").forEach((line, r) =>
+      label(line, 16, x, y + VALUE_Y + r * VAL_H, VALUE));
   });
 }
 
 /* ---- help row ------------------------------------------------------ */
 {
-  round(GRID_X, INFO_Y, GRID_W, INFO_H, 6, BG, EDGE);
+  round(GRID_X, INFO_Y, GRID_W, INFO_H, 6, BG, STROKE);
 
   // gate shape icon: two held notes and the air between them
   g.strokeStyle = ACCENT;
@@ -155,20 +175,26 @@ g.fillRect(0, HDR_H - 2, PANEL_W, 1);
 /* ---- legend: 3 + 3 + 4 columns ------------------------------------- */
 function btn(x, y, w, text, on) {
   round(x, y, w, LEG_BTN_H, 5, on ? ACCENT : BG, on ? ACCENT : EDGE);
-  if (text) label(text, 12, x + w / 2, y + 5, on ? "#000000" : CAPTION, "center");
+  if (text) {
+    g.textBaseline = "middle";   // the firmware centres it in the 24 px chip
+    label(text, 12, x + w / 2, y + LEG_BTN_H / 2, on ? BG : CAPTION, "center");
+    g.textBaseline = "top";
+  }
 }
 
 {
-  const wide = 152, narrow = 111;
+  // the fixed grid of ScreenPanel.cpp: 150 px wide chips 9 apart, 111 px ones
+  // 8 apart, both rows starting at the card's left edge (6)
+  const wide = 150, narrow = 111;
   const y1 = LEG_Y, y2 = LEG_Y + LEG_ROW_H, y3 = LEG_Y + LEG_ROW_H * 2;
 
   btn(6, y1, wide, "PREV");
-  btn(166, y1, wide, "NEXT");
-  round(326, y1, 148, LEG_BTN_H, 5, null, EDGE);   // empty slot keeps the column
+  btn(165, y1, wide, "NEXT");
+  round(324, y1, wide, LEG_BTN_H, 5, null, EDGE);   // empty slot keeps the column
 
   btn(6, y2, wide, "EDIT", true);
-  btn(166, y2, wide, "BASS");
-  btn(326, y2, wide, "GENERATE");
+  btn(165, y2, wide, "BASS");
+  btn(324, y2, wide, "GENERATE");
 
   btn(6, y3, narrow, "TIE");
   btn(125, y3, narrow, "GLIDE");

@@ -1383,7 +1383,7 @@ const char* modeName() {
 const char* modeHeaderLabel() {
   static char name[20];
   if (modeBase == MODE_NONE || modeVariant == 0) return "---";
-  if (chSelOverlay()) return "CHANNEL SELECT";
+  if (chSelOverlay() && modeBase != MODE_ENC) return "CHANNEL SELECT";
   if (modeVariant == 1) return fullNames[modeBase];
   snprintf(name, sizeof(name), "%s %u", fullNames[modeBase], modeVariant);
   return name;

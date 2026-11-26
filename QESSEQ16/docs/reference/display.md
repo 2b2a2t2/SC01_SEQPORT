@@ -19,22 +19,29 @@ pads switch it.
 | Band | y | |
 |---|---|---|
 | header | 0–35 | the page's name at 16 px; the right slot at 12 px carries the temporary message while one is up and `TRACK 02 - STEP 08/16` when none is |
-| step lane | 37–64 | sixteen numbered chips, 25 × 22 with the pad number inside, 3 px of air above and below: the channel the current mode is on (edited track, keyboard, encoder bank) filled in cyan, a square edged in cyan for a step that carries notes, the playhead marked inside its square |
+| step lane | 37–64 | sixteen chips, 25 × 22 with the pad's own number (1–16) inside, 3 px of air above and below: the encoder bank's channel edged in cyan, the edited track's channel filled in cyan, the keyboard's channel underlined, a white number where the step carries notes, the playhead marked inside its square |
 | cells | 66–195 | one rounded black card: 4 × 117 by two rows of 65, a 10 px caption over a 16 px value |
 | help row | 197–234 | pictogram, the page's name and one line saying what the page is for |
 | legend | 236–313 | three rows of chips, 3 + 3 + 4 columns |
 
 The panel keeps the pre-redesign theme: **white values on black**, dark grey cards and chips
 (`#1C1C1C`), crisp hairlines, light grey captions, and cyan reserved for what is live — the
-accented chip, the lit lane square, the playhead, the dial pointer, the curves and the temporary
+accented chip, the lane's channel marks, the playhead, the dial pointer, the curves and the temporary
 message in the header.
 
-The step lane is the exception to the chip grey: a square is the page's black inside its outline —
-nothing is filled for a step that carries notes, only its edge turns cyan — so the row reads as
-sixteen pads on the page with the mode's own channel the only square that stands out. The help row's information strip is black as well, drawn
+The step lane is the exception to the chip grey: a square is the page's black inside its outline, so
+the row reads as sixteen pads on the page. Each square carries its own pad number, and **all three
+channel marks apply at once in every mode**: the encoder bank's channel is edged in cyan (drawn in
+black where the square is already lit, so the outline stays visible), the sequence's edit channel is
+filled cyan, and the keyboard's channel has its number underlined — the KEYMODE3 lock, which binds
+the encoder and the keyboard to the sequence's channel, puts all three on the same square. A step
+that carries notes has its number drawn white instead of grey, and the playhead is a bar at the
+bottom of its own square. The help row's information strip is black as well, drawn
 as its hairline outline only, so the pictogram and the page description sit on the page rather
 than on a second grey card. The legend's chips follow it: an unarmed chip is black inside its
 `#4A4A4A` outline, so the grey `#1C1C1C` is left only to the level-bar tracks.
 
 A step costs two lane chips and the status slot, not the screen: `scrStepLane()` and `scrStatus()`
-compare against what is already drawn, and both are no-ops on the 128x64 strip.
+compare against what is already drawn, and both are no-ops on the 128x64 strip. The lane re-reads
+the three channels on every pass, so an encoder or keyboard channel move repaints it as well, not
+only a sequencer one.

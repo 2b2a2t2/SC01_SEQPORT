@@ -6,6 +6,9 @@
 #include "PanelSC01.h"
 #include "SeqClock.h"   // seqStepBreath(): the paint loop hands the beat through
 
+#include "Keyboard.h"  // keyChannel(), seqEditChannel()
+#include "Encoders.h"  // encChannel()
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -23,9 +26,10 @@ PanelSC01 tft;
    y  0..15  header strip   ->  y   0..35   header (36 px): the page's name
                                             at 16 px, a 12 px status slot on
                                             the right, accent rule under it
-   (no OLED counterpart)    ->  y  37..64   step lane: sixteen numbered
-                                            squares, the channel the current
-                                            mode is on lit, the playhead marked
+   (no OLED counterpart)    ->  y  37..64   step lane: sixteen squares numbered
+                                            1..16, the encoder channel outlined,
+                                            the sequencer's lit, the keyboard's
+                                            underlined, the playhead marked
    y 16..47  two knob rows  ->  y  66..195  one card: 4 x 2 cells of 117x65
    y 48..63  control legend ->  y 197..234  help row: a pictogram, the page's
                                             name and one line about it
@@ -58,10 +62,11 @@ PanelSC01 tft;
 // The pre-redesign theme, kept under the new layout: a black page, dark grey
 // cards and chips, grey hairlines, WHITE for every value and name, a light grey
 // for the captions read second, and cyan only where something is live - the
-// accented chip, the lit lane square, the playhead, the curves and the
-// transient message.  The lane sits apart from the other chips: a square's fill
-// is the page's black, so the row reads as sixteen pads on the page and not as
-// a grey band, and the one lit square is the only thing that draws the eye.
+// accented chip, the lane's three channel marks, the playhead, the curves and
+// the transient message.  The lane sits apart from the other chips: a square's
+// fill is the page's black, so the row reads as sixteen pads on the page and
+// not as a grey band, and the three marked squares are the only thing that
+// draws the eye.
 // White-on-black is what the panel had before the mockup
 // restyle; it is the more comfortable of the two to read at 16 px.  Hex in the
 // comments is the 8-bit colour these 565 words were rounded from.
@@ -164,12 +169,14 @@ static void useCaption() {
 #define HEADER_TEXT_Y   8                       // the 16 px name's ink
 #define STATUS_TEXT_Y  12                       // the 12 px slot's ink
 // The step lane is the pads' own picture: sixteen 25 x 22 squares, each with
-// its pad number drawn inside, the square of the channel the current mode works
-// on filled in the accent, a square edged for a step that carries notes and
-// the playhead marked inside its own square.  With the number inside instead of
-// under a 13 px bar, the band is the squares plus 3 px of air above and below.
-// The squares are 22 px tall: a chip, not a tile - the row is the strip along
-// the top of the page, and the knob card under it is the page itself.
+// its own pad number (1..16) drawn inside, and the three channel marks every
+// mode shows at once - the encoder channel's square edged, the sequence
+// channel's filled in the accent, the keyboard channel's number underlined -
+// with the playhead marked inside its own square.  With the number inside
+// instead of under a 13 px bar, the band is the squares plus 3 px of air above
+// and below.  The squares are 22 px tall: a chip, not a tile - the row is the
+// strip along the top of the page, and the knob card under it is the page
+// itself.
 #define LANE_Y        (HEADER_H + PAD)          // 37
 #define LANE_H         28
 #define LANE_BAR_Y    (LANE_Y + 3)              // 40
@@ -354,10 +361,15 @@ static char statusText[32] = "";
 static char modeLabel[3][10] = { "ENCODER", "SEQUENCER", "KEYBOARD" };
 static uint8_t activeMode = SCR_MODE_NONE;
 
-// The step lane, from scrStepLane: the channel the current mode works on (0 =
-// none lit), one bit per slot for a step that carries notes, and the pad the
-// playhead is on (0xFF = none).
-static uint8_t laneChan = 0;
+// The step lane, from scrStepLane: the three channels every mode marks at once
+// (the sequencer's edit channel, the encoder bank's CC channel, the keyboard's
+// channel), one bit per slot for a step that carries notes, and the pad the
+// playhead is on (0xFF = none).  The three channels are read fresh on every
+// pass and compared here, so a channel move repaints the lane even when the
+// rest of the screen has nothing to say about it.
+static uint8_t laneSeqCh = 0;
+static uint8_t laneEncCh = 0;
+static uint8_t laneKeyCh = 0;
 static uint16_t laneUsed = 0;
 static uint8_t lanePlay = 0xFF;
 static uint8_t lanePlayDrawn = 0xFF;
@@ -671,33 +683,58 @@ static void drawHeader() {
   useGrid();          // back to the default face for later draws
 }
 
-// One square of the step lane, its pad number drawn inside it.  A square's fill
-// is the page's black, so the row stays quiet and reads as sixteen pads rather
-// than a grey band; a square that carries notes keeps the accent edge it has
-// always had, the square of the channel the mode is on is the accent (with the
-// number in the page's black so it stays readable on it), and the playhead is a
-// bar inside its square - black on the accent, cyan everywhere else, so it
-// reads on any fill.
+// One square of the step lane, its own pad number (1..16) drawn inside it, and
+// the three channel marks every mode shows at the same time:
+//
+//   outlined     the encoder channel's square has the accent edge
+//   lit          the sequencer channel's square is filled with the accent
+//   underlined   the keyboard channel's number carries a bar under it
+//
+// The marks are read from the three channel getters rather than from "the
+// channel the mode is on", because in every mode all three apply at once: a
+// keyboard page still shows which channel the sequence and the encoder bank
+// are on, and vice versa.  KEYMODE3 locks the encoder and the keyboard to the
+// sequence's channel, so the locked square naturally carries all three - the
+// fill, the edge and the underline land on the same pad.
+//
+// An edge on an accent fill would be invisible, so the encoder's outline is
+// drawn in the page's black where the square is already lit; elsewhere it is
+// cyan on the page's black.  The number's colour still says whether the pad
+// carries notes - white for a used step, grey for an empty one - which is the
+// mark the accent edge used to carry before the edge became the encoder's.  The
+// playhead keeps its bar at the bottom of the square: black on the accent, cyan
+// everywhere else, so it reads on any fill, and clear of the underline above it.
 static void drawLaneChip(uint8_t k) {
   const int x = LANE_X0 + k * (LANE_W + LANE_GAP);
-  const bool on = (laneChan == (uint8_t)(k + 1));
-  const bool used = ((laneUsed >> k) & 1) != 0;
+  const bool lit = (laneSeqCh == (uint8_t)(k + 1));
+  const bool edge = (laneEncCh == (uint8_t)(k + 1));
+  const bool under = (laneKeyCh == (uint8_t)(k + 1));
+  const bool used = (laneUsed & (uint16_t)(1u << k)) != 0;
   const bool play = (lanePlay == k);
-  const uint16_t fill = on ? COL_ACCENT : COL_BG;
-  const uint16_t edge = on ? COL_ACCENT : (used ? COL_ACCENT : COL_EDGE);
-  tft.fillRoundRect(x, LANE_BAR_Y, LANE_W, LANE_BAR_H, 3, fill);
-  tft.drawRoundRect(x, LANE_BAR_Y, LANE_W, LANE_BAR_H, 3, edge);
 
+  const uint16_t fill = lit ? COL_ACCENT : COL_BG;
+  const uint16_t ring = edge ? (lit ? COL_GRIDBG : COL_ACCENT)
+                             : (lit ? COL_ACCENT : COL_EDGE);
+  tft.fillRoundRect(x, LANE_BAR_Y, LANE_W, LANE_BAR_H, 3, fill);
+  tft.drawRoundRect(x, LANE_BAR_Y, LANE_W, LANE_BAR_H, 3, ring);
+
+  // The number sits a little above the square's centre: its box is 11 px and
+  // the square is 22, which leaves the underline room under the ink (53..54)
+  // and the playhead its bar at the bottom (58..59).
   char n[4];
   snprintf(n, sizeof(n), "%u", (unsigned)(k + 1));
+  const int cx = x + LANE_W / 2;
   tft.setTextDatum(lgfx::textdatum_t::middle_center);
   useCaption();
-  tft.setTextColor(on ? COL_GRIDBG : COL_DIM, fill);
-  tft.drawString(n, x + LANE_W / 2, LANE_BAR_Y + LANE_BAR_H / 2);
+  tft.setTextColor(lit ? COL_GRIDBG : (used ? COL_TEXT : COL_DIM), fill);
+  tft.drawString(n, cx, LANE_BAR_Y + 8);
+
+  if (under)
+    tft.fillRect(cx - 7, LANE_BAR_Y + 13, 14, 2, lit ? COL_GRIDBG : COL_ACCENT);
 
   if (play)
     tft.fillRect(x + 3, LANE_BAR_Y + LANE_BAR_H - 4, LANE_W - 6, 2,
-                 on ? COL_GRIDBG : COL_ACCENT);
+                 lit ? COL_GRIDBG : COL_ACCENT);
 }
 
 static void drawStepLane() {
@@ -1369,11 +1406,12 @@ void scrClear() {
   legendDirty = false;
   statusText[0] = '\0';
   statusDirty = true;
-  laneChan = 0;
   laneUsed = 0;
   lanePlay = 0xFF;
   lanePlayDrawn = 0xFF;
-  laneDirty = true;
+  laneDirty = true;   // the lane repaints with the channel statics as they are;
+                      // scrStepLane() re-reads them on its next pass, before
+                      // scrUpdate() gets to draw
   helpDirty = true;
   mainDirty = true;   // one band repaint draws the blank model back
 }
@@ -1419,17 +1457,23 @@ void scrStatus(const char* text) {
   statusDirty = true;
 }
 
-// SC01 only: the step lane under the header.  `chan` is the channel the current
-// mode is working on (1..16; 0 lights none) - its square is the one filled in
-// the accent - `used` a bit per slot for a step that carries notes, `play` the
-// pad the playhead is on (0xFF for none).  A playhead move on its own repaints
-// two chips, not the sixteen.
-void scrStepLane(uint8_t chan, uint16_t used, uint8_t play) {
-  if (chan > LANE_SLOTS) chan = 0;
+// SC01 only: the step lane under the header.  `used` is a bit per slot for a
+// step that carries notes, `play` the pad the playhead is on (0xFF for none).
+// The three channels the lane marks are read here instead of passed in: it
+// shows all of them at once, in every mode, and this runs once per loop - so an
+// encoder or keyboard channel move repaints it too, not only a sequencer one.
+// A playhead move on its own repaints two chips, not the sixteen.
+void scrStepLane(uint16_t used, uint8_t play) {
   if (play >= LANE_SLOTS) play = 0xFF;
-  if (chan != laneChan || used != laneUsed) {
-    laneChan = chan;
+  const uint8_t seq = seqEditChannel();
+  const uint8_t enc = encChannel();
+  const uint8_t key = keyChannel();
+  if (used != laneUsed || seq != laneSeqCh || enc != laneEncCh ||
+      key != laneKeyCh) {
     laneUsed = used;
+    laneSeqCh = seq;
+    laneEncCh = enc;
+    laneKeyCh = key;
     laneDirty = true;
   }
   lanePlay = play;

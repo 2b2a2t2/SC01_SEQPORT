@@ -263,12 +263,14 @@ static void writeLegends() {
 // SC01 panel chrome: the step lane and the header's status slot.
 //
 // The lane is the pads' own picture - one numbered square per pad of the edit
-// window, the playhead marked, a square filled for a step that carries notes,
-// and the square of the channel the current mode works on lit in the accent - so
-// it reads the same numbers the pads do, from the same functions.  The mask is
-// rebuilt when the screen is (an edit, a page move, a track switch); the
-// playhead and the channel are read every loop, which is why a step costs two
-// chips rather than the whole band.
+// window, the playhead marked, a square filled for a step that carries notes -
+// so it reads the same numbers the pads do, from the same functions.  The
+// channel marks are drawn by the panel itself (ScreenPanel.cpp reads
+// seqEditChannel(), encChannel() and keyChannel() there): in every mode the lane
+// shows all three at once, so the mode's own channel is no longer what decides
+// what is lit.  The mask is rebuilt when the screen is (an edit, a page move, a
+// track switch); the playhead and the three channels are read every loop, which
+// is why a step costs two chips rather than the whole band.
 // ---------------------------------------------------------------------------
 static uint16_t laneUsed = 0;
 
@@ -281,20 +283,10 @@ static void panelLaneFromPattern() {
       laneUsed |= (uint16_t)(1u << i);
 }
 
-// The channel the lane lights: the one the current mode is working on - the
-// sequence being edited, the keyboard's channel, or the encoder bank's CC
-// channel.  No family latched lights nothing.
-static uint8_t panelStripChannel() {
-  if (modeBase == MODE_SEQ) return seqEditChannel();
-  if (modeBase == MODE_KEY) return keyChannel();
-  if (modeBase == MODE_ENC) return encChannel();
-  return 0;
-}
-
 // Called every loop: both panel setters compare against what is already drawn,
 // so the common case is a handful of reads and nothing on the bus.
 static void panelChrome() {
-  scrStepLane(panelStripChannel(), laneUsed, seqStepPlayPad());
+  scrStepLane(laneUsed, seqStepPlayPad());
 
   static uint8_t lastCh = 0xFF, lastLen = 0xFF, lastPad = 0xFF, lastBase = 0xFF;
   const uint8_t ch = seqEditChannel();

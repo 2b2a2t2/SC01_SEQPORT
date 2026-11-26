@@ -6,6 +6,23 @@ de-facto version marker is the size of the saved-settings block (see
 
 ## Unreleased
 
+### SC01 panel: the lane names all three channels at once
+
+- **Every lane square shows its own pad number, 1–16.** It used to repeat the number of the channel
+  the current mode was on in all sixteen squares, which said nothing about which square was which.
+- **All three channel marks apply in every mode at the same time**: the encoder bank's channel is
+  edged in cyan, the sequence's edit channel fills its square, the keyboard's channel has its number
+  underlined. KEYMODE3 binds the encoder and the keyboard to the sequence's channel, so the locked
+  square carries all three marks on the same pad. The outline is drawn in the page's black where the
+  square is already lit — a cyan edge on a cyan fill would show nothing.
+- **The lane follows all three channels, not only the sequencer's.** `scrStepLane()` reads
+  `seqEditChannel()`, `encChannel()` and `keyChannel()` itself, so an encoder or a keyboard channel
+  move repaints the band; its `chan` argument (and `panelStripChannel()` with it) is gone, since no
+  single channel decides the picture any more.
+- **A step that carries notes keeps a mark of its own.** The accent edge it used to have now belongs
+  to the encoder channel, so a used step's number is drawn white instead of grey. The playhead bar
+  is unchanged, at the bottom of its square, clear of the new underline.
+
 ### SC01 panel: black lane pads, and a strip that breathes
 
 - **The step lane's squares are the page's black.** An empty square was `#080808` and a step that

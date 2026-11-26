@@ -95,7 +95,7 @@ void scrModeRow(uint8_t) {}   // 128x64: the family is named in the header
 // The panel's step lane and status slot have no counterpart here: the strip is
 // 128 px wide, its header is one line and the pads are already the step picture.
 void scrStatus(const char*) {}
-void scrStepLane(uint8_t, uint16_t, uint8_t) {}
+void scrStepLane(uint16_t, uint8_t) {}
 
 static int cellX(uint8_t i) { return (i & 3) * SCR_COL_W + 1; }
 static int cellLabelY(uint8_t i) { return (i >> 2) ? 38 : 22; }
@@ -313,9 +313,10 @@ void scrEnvRow(const char* const envCaps[4], const uint8_t envVals[4],
 
   // readouts: the ADSR's four only - the filter's numbers are the first two
   // columns' dials above it
+  // 4 columns in 64px: 14px wide each with 2px gaps, starting at x=64
   for (uint8_t k = 0; k < 4; k++) {
-    const int x = half + (int)k * (half / 4) + 1;
-    const int w = half / 4 - 2;
+    const int x = 64 + k * 16;           // 64, 70, 86, 102
+    const int w = 14;
     u8g2.drawFrame(x, 51, w, 3);
     const int fill = (int)v[k] * (w - 2) / 127;
     if (fill > 0) u8g2.drawBox(x + 1, 52, fill, 1);
@@ -325,7 +326,8 @@ void scrEnvRow(const char* const envCaps[4], const uint8_t envVals[4],
   u8g2.setFont(u8g2_font_micro_tr);
   for (uint8_t k = 0; k < 4; k++) {
     if (!envCaps[k] || !envCaps[k][0]) continue;
-    const int x = half + (int)k * (half / 4) + (half / 8);
+    // center caption within each 16px column, starting from x=64+
+    const int x = 64 + k * 16 + 7;
     u8g2.drawStr(x - (int)u8g2.getStrWidth(envCaps[k]) / 2, 63, envCaps[k]);
   }
   mark();
